@@ -536,7 +536,7 @@ EXPORT(int, sceCtrlResetLightBar) {
 
 EXPORT(int, sceCtrlSetActuator, int port, const SceCtrlActuator *pState) {
     if (!host.cfg.pstv_mode) {
-        return RET_ERROR(SCE_CTRL_ERROR_NOT_SUPPORTED);
+       // return RET_ERROR(SCE_CTRL_ERROR_NOT_SUPPORTED);
     }
 
     CtrlState &state = host.ctrl;
@@ -545,12 +545,13 @@ EXPORT(int, sceCtrlSetActuator, int port, const SceCtrlActuator *pState) {
 
     for (const auto &controller : state.controllers) {
         if (controller.second.port == port) {
-            SDL_Haptic *handle = controller.second.haptic.get();
             if (pState->small == 0 && pState->large == 0) {
-                SDL_HapticRumbleStop(handle);
+                SDL_GameControllerRumble(controller.second.controller.get(), 0, 0,
+                    1000);
+                
             } else {
-                // TODO: Look into a better implementation to distinguish both motors when available
-                SDL_HapticRumblePlay(handle, ((pState->small * 1.0f) / 510.0f) + ((pState->large * 1.0f) / 510.0f), SDL_HAPTIC_INFINITY);
+                SDL_GameControllerRumble(controller.second.controller.get(), pState->small / 100.0f * 0xEFFF, pState->large / 100.0f * 0xEFFF,
+                    1000);
             }
             return 0;
         }

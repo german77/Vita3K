@@ -95,6 +95,16 @@ int main(int argc, char *argv[]) {
             return InitConfigFailed;
     } else {
         std::atexit(SDL_Quit);
+        // Enable HIDAPI rumble. This prevents SDL from disabling motion on PS4 and PS5 controllers
+        SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS4_RUMBLE, "1");
+        SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_PS5_RUMBLE, "1");
+
+        // Tell SDL2 to use the hidapi driver. This will allow joycons to be detected as a
+        // GameController and not a generic one
+        SDL_SetHint("SDL_JOYSTICK_HIDAPI_JOY_CONS", "1");
+
+        // Turn off Pro controller home led
+        SDL_SetHint("SDL_JOYSTICK_HIDAPI_SWITCH_HOME_LED", "0");
         if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC | SDL_INIT_VIDEO) < 0) {
             app::error_dialog("SDL initialisation failed.");
             return SDLInitFailed;
