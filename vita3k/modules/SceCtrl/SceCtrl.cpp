@@ -274,6 +274,11 @@ static void apply_controller(uint32_t *buttons, float axes[4], SDL_GameControlle
     if (SDL_GameControllerIsSensorEnabled(controller, SDL_SENSOR_ACCEL)) {
         float values[3];
         int result = SDL_GameControllerGetSensorData(controller, SDL_SENSOR_ACCEL, values, 3);
+        // Use accelerometer values here
+    }
+    if (SDL_GameControllerIsSensorEnabled(controller, SDL_SENSOR_GYRO)) {
+        float values[3];
+        int result = SDL_GameControllerGetSensorData(controller, SDL_SENSOR_GYRO, values, 3);
         // Use gyro values here
     }
 }
