@@ -270,6 +270,12 @@ static void apply_controller(uint32_t *buttons, float axes[4], SDL_GameControlle
     axes[1] += axis_to_axis(SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_LEFTY));
     axes[2] += axis_to_axis(SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_RIGHTX));
     axes[3] += axis_to_axis(SDL_GameControllerGetAxis(controller, SDL_CONTROLLER_AXIS_RIGHTY));
+
+    if (SDL_GameControllerIsSensorEnabled(controller, SDL_SENSOR_ACCEL)) {
+        float values[3];
+        int result = SDL_GameControllerGetSensorData(controller, SDL_SENSOR_ACCEL, values, 3);
+        // Use gyro values here
+    }
 }
 
 static uint8_t float_to_byte(float f) {
@@ -318,6 +324,12 @@ static void add_new_controllers(CtrlState &state) {
                 const GameControllerPtr controller(SDL_GameControllerOpen(joystick_index), SDL_GameControllerClose);
                 new_controller.controller = controller;
                 new_controller.port = reserve_port(state);
+                if (SDL_GameControllerHasSensor(controller.get(), SDL_SENSOR_ACCEL)) {
+                    SDL_GameControllerSetSensorEnabled(controller.get(), SDL_SENSOR_ACCEL, SDL_TRUE);
+                }
+                if (SDL_GameControllerHasSensor(controller.get(), SDL_SENSOR_GYRO)) {
+                    SDL_GameControllerSetSensorEnabled(controller.get(), SDL_SENSOR_GYRO, SDL_TRUE);
+                }
                 state.controllers.emplace(guid, new_controller);
                 state.controllers_num++;
             }
