@@ -17,7 +17,12 @@
 
 #include "SceMotion.h"
 
-EXPORT(int, sceMotionGetAngleThreshold) {
+#include <motion/functions.h>
+#include <motion/motion.h>
+
+#include <util/log.h>
+
+EXPORT(float, sceMotionGetAngleThreshold) {
     return UNIMPLEMENTED();
 }
 
@@ -33,7 +38,7 @@ EXPORT(int, sceMotionGetBasicOrientation, SceFVector3 *basicOrientation) {
     return 0;
 }
 
-EXPORT(int, sceMotionGetDeadband) {
+EXPORT(SceBool, sceMotionGetDeadband) {
     return UNIMPLEMENTED();
 }
 
@@ -41,23 +46,23 @@ EXPORT(int, sceMotionGetDeadbandExt) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionGetDeviceLocation) {
+EXPORT(int, sceMotionGetDeviceLocation, SceMotionDeviceLocation *devLocation) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionGetGyroBiasCorrection) {
+EXPORT(SceBool, sceMotionGetGyroBiasCorrection) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionGetMagnetometerState) {
+EXPORT(SceBool, sceMotionGetMagnetometerState) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionGetSensorState) {
+EXPORT(int, sceMotionGetSensorState, SceMotionSensorState *sensorState, int numRecords) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionGetState) {
+EXPORT(int, sceMotionGetState, SceMotionState *motionState) {
     return UNIMPLEMENTED();
 }
 
@@ -69,7 +74,7 @@ EXPORT(int, sceMotionGetStateInternal) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionGetTiltCorrection) {
+EXPORT(SceBool, sceMotionGetTiltCorrection) {
     return UNIMPLEMENTED();
 }
 
@@ -97,15 +102,15 @@ EXPORT(int, sceMotionResetExt) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionRotateYaw) {
+EXPORT(int, sceMotionRotateYaw, const float radians) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionSetAngleThreshold) {
+EXPORT(int, sceMotionSetAngleThreshold, const float angle) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionSetDeadband) {
+EXPORT(int, sceMotionSetDeadband, SceBool setValue) {
     return UNIMPLEMENTED();
 }
 
@@ -113,11 +118,11 @@ EXPORT(int, sceMotionSetDeadbandExt) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionSetGyroBiasCorrection) {
+EXPORT(int, sceMotionSetGyroBiasCorrection, SceBool setValue) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceMotionSetTiltCorrection) {
+EXPORT(int, sceMotionSetTiltCorrection, SceBool setValue) {
     return UNIMPLEMENTED();
 }
 

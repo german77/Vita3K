@@ -27,6 +27,7 @@
 #include <ime/state.h>
 #include <io/state.h>
 #include <kernel/state.h>
+#include <motion/state.h>
 #include <net/state.h>
 #include <ngs/state.h>
 #include <nids/types.h>
@@ -91,6 +92,7 @@ struct HostState {
     SceFVector2 viewport_size = { 0, 0 };
     MemState mem;
     CtrlState ctrl;
+    MotionState motion;
     TouchState touch;
     KernelState kernel;
     AudioState audio;
