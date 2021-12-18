@@ -15,10 +15,12 @@ add_library(
 	include/util/lock_and_find.h
 	include/util/log.h
 	include/util/preprocessor.h
+	include/util/quaternion.h
 	include/util/pool.h
 	include/util/string_utils.h
 	include/util/system.h
 	include/util/types.h
+	include/util/vector_math.h
 	include/util/vector_utils.h
 	src/util.cpp
 	src/instrset_detect.cpp

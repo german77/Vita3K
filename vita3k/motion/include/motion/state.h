@@ -18,6 +18,7 @@
 #pragma once
 
 #include <motion/motion.h>
+#include <motion/motion_input.h>
 
 #include <SDL_GameController.h>
 
@@ -26,5 +27,5 @@ struct _SDL_GameController;
 typedef std::shared_ptr<_SDL_GameController> GameControllerPtr;
 
 struct MotionState {
-    // Put variable used by app here
+    MotionInput motion_data;
 };
