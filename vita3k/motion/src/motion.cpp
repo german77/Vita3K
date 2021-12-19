@@ -54,7 +54,7 @@ SceBool get_gyro_bias_correction(const MotionState &state) {
     return state.motion_data.IsGyroBiasEnabled();
 }
 
-SceFVector3 set_gyro_bias_correction(MotionState& state, SceBool setValue) {
+void set_gyro_bias_correction(MotionState& state, SceBool setValue) {
     state.motion_data.EnableGyroBias(setValue);
 }
 

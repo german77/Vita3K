@@ -28,6 +28,6 @@ SceFVector3 get_gyro_bias(const MotionState &state);
 Util::Quaternion<SceFloat> get_quaternion(const MotionState &state);
 SceBool get_gyro_bias_correction(const MotionState &state);
 
-SceFVector3 set_gyro_bias_correction(MotionState &state, SceBool setValue);
+void set_gyro_bias_correction(MotionState &state, SceBool setValue);
 
 void refresh_motion(MotionState &state);

@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <array>
 #include "util/vector_math.h"
 
 namespace Util {
