@@ -127,7 +127,6 @@ static void convertSceSockaddrToPosix(const SceNetSockaddr *src, sockaddr *dst) 
     const SceNetSockaddrIn *src_in = (const SceNetSockaddrIn *)src;
     sockaddr_in *dst_in = (sockaddr_in *)dst;
     dst_in->sin_family = src_in->sin_family;
-    dst_in->sin_port = src_in->sin_port;
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
@@ -138,7 +137,6 @@ static void convertPosixSockaddrToSce(sockaddr *src, SceNetSockaddr *dst) {
     SceNetSockaddrIn *dst_in = (SceNetSockaddrIn *)dst;
     sockaddr_in *src_in = (sockaddr_in *)src;
     dst_in->sin_family = static_cast<unsigned char>(src_in->sin_family);
-    dst_in->sin_port = src_in->sin_port;
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
@@ -166,7 +164,6 @@ int PosixSocket::get_socket_address(SceNetSockaddr *name, unsigned int *namelen)
     }
     int res = getsockname(sock, &addr, (socklen_t *)namelen);
     if (res >= 0) {
-        convertPosixSockaddrToSce(&addr, name);
         *namelen = sizeof(SceNetSockaddrIn);
     }
     return res;
@@ -347,7 +344,6 @@ int PosixSocket::recv_packet(void *buf, unsigned int len, int flags, SceNetSocka
     if (from != nullptr) {
         sockaddr addr;
         int res = recvfrom(sock, (char *)buf, len, flags, &addr, (socklen_t *)fromlen);
-        convertPosixSockaddrToSce(&addr, from);
         *fromlen = sizeof(SceNetSockaddrIn);
 
         return translate_return_value(res);

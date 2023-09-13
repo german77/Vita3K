@@ -24,6 +24,7 @@
 #include <io/device.h>
 #include <io/functions.h>
 #include <io/vfs.h>
+#include <net/state.h>
 #include <packages/functions.h>
 #include <util/log.h>
 #include <util/string_utils.h>
@@ -509,10 +510,11 @@ EXPORT(SceCommonDialogStatus, sceNetCheckDialogGetStatus) {
     return emuenv.common_dialog.status;
 }
 
-EXPORT(int, sceNetCheckDialogInit) {
+EXPORT(int, sceNetCheckDialogInit, SceNetCheckDialogParam *param) {
     TRACY_FUNC(sceNetCheckDialogInit);
     emuenv.common_dialog.type = NETCHECK_DIALOG;
     emuenv.common_dialog.status = SCE_COMMON_DIALOG_STATUS_FINISHED;
+
     return UNIMPLEMENTED();
 }
 

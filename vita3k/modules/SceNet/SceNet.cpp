@@ -17,7 +17,6 @@
 
 #include "SceNet.h"
 
-#include <cstdio>
 #include <kernel/state.h>
 #include <net/state.h>
 #include <net/types.h>
@@ -131,7 +130,8 @@ EXPORT(int, sceNetBind, int sid, const SceNetSockaddr *addr, unsigned int addrle
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
     }
-    return sock->bind(addr, addrlen);
+    auto res = sock->bind(addr, addrlen);
+    return res;
 }
 
 EXPORT(int, sceNetClearDnsCache) {
@@ -445,7 +445,9 @@ EXPORT(int, sceNetRecvfrom, int sid, void *buf, unsigned int len, int flags, Sce
     if (!sock) {
         return RET_ERROR(SCE_NET_ERROR_EBADF);
     }
-    return sock->recv_packet(buf, len, flags, from, fromlen);
+
+    const int ret = sock->recv_packet(buf, len, flags, from, fromlen);
+    return ret;
 }
 
 EXPORT(int, sceNetRecvmsg) {
@@ -512,6 +514,7 @@ EXPORT(int, sceNetSendto, int sid, const void *msg, unsigned int len, int flags,
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
     }
+
     return sock->send_packet(msg, len, flags, to, tolen);
 }
 
@@ -551,19 +554,34 @@ EXPORT(int, sceNetShowRoute) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceNetShutdown) {
-    TRACY_FUNC(sceNetShutdown);
+EXPORT(int, sceNetShutdown, int eid, int how) {
+    TRACY_FUNC(sceNetShutdown, eid, how);
     return UNIMPLEMENTED();
 }
 
 EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, SceNetProtocol protocol) {
     TRACY_FUNC(sceNetSocket, name, domain, type, protocol);
-    SocketPtr sock;
-    if (type < SCE_NET_SOCK_STREAM || type > SCE_NET_SOCK_RAW) {
-        sock = std::make_shared<P2PSocket>(domain, type, protocol);
-    } else {
-        sock = std::make_shared<PosixSocket>(domain, type, protocol);
+    int hostSockType = 0;
+    switch (type) {
+    case SCE_NET_SOCK_STREAM:
+        hostSockType = SOCK_STREAM;
+        break;
+    case SCE_NET_SOCK_DGRAM:
+        hostSockType = SOCK_DGRAM;
+        break;
+    case SCE_NET_SOCK_RAW:
+        hostSockType = SOCK_RAW;
+        break;
+        // The cases below are the biggest stub in history
+    case SCE_NET_SOCK_DGRAM_P2P:
+        hostSockType = SOCK_DGRAM;
+        break;
+    case SCE_NET_SOCK_STREAM_P2P:
+        hostSockType = SOCK_STREAM;
+        break;
     }
+
+    SocketPtr sock = std::make_shared<PosixSocket>(domain, hostSockType, protocol);
     auto id = ++emuenv.net.next_id;
     emuenv.net.socks.emplace(id, sock);
     return id;

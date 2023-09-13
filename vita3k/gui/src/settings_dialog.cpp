@@ -17,6 +17,7 @@
 
 #include "imgui.h"
 #include "private.h"
+#include "util/net_utils.h"
 
 #include <app/functions.h>
 #include <audio/state.h>
@@ -1070,6 +1071,51 @@ void draw_settings_dialog(GuiState &gui, EmuEnvState &emuenv) {
         ImGui::Spacing();
         ImGui::Checkbox(lang.network["psn_signed_in"].c_str(), &config.psn_signed_in);
         SetTooltipEx(lang.network["psn_signed_in_description"].c_str());
+
+        // Adhoc
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        const auto adhoc = ImGui::CalcTextSize("Adhoc").x;
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() / 2.f) - (adhoc / 2.f));
+        ImGui::TextColored(GUI_COLOR_TEXT_MENUBAR, "Adhoc");
+        ImGui::Spacing();
+
+        std::vector<const char *> addrsSelect;
+        std::vector<const char *> baddrsSelect;
+        std::vector<net_utils::AssignedAddr> addrs;
+        net_utils::getAllAssignedAddrs(addrs);
+
+        std::vector<std::string *> holder;
+        std::vector<std::string *> broadcastHolder;
+
+        for (auto &addr : addrs) {
+            const auto a = new std::string(addr.addr + " (" + addr.name + ")");
+            holder.emplace_back(a);
+            addrsSelect.emplace_back(a->c_str());
+
+            const auto b = new std::string(addr.bcast + " (" + addr.name + ")");
+            broadcastHolder.emplace_back(b);
+            baddrsSelect.emplace_back(b->c_str());
+        }
+
+        ImGui::Combo("Adhoc Address", &emuenv.cfg.adhoc_addr, addrsSelect.data(), static_cast<int>(addrsSelect.size()));
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Select which Address to use in adhoc.");
+
+        ImGui::BeginDisabled();
+        ImGui::Combo("Adhoc Broadcast Address", &emuenv.cfg.adhoc_addr, baddrsSelect.data(), static_cast<int>(baddrsSelect.size()));
+        ImGui::EndDisabled();
+
+        for (auto &h : holder) {
+            delete h;
+        }
+
+        for (auto &h : broadcastHolder) {
+            delete h;
+        }
+        holder.clear();
+        broadcastHolder.clear();
 
         // HTTP
         ImGui::Spacing();
