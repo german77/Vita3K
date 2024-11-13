@@ -90,6 +90,9 @@ if(NOT MSVC)
 	add_compile_options(-Wformat -Werror=format-security)
 endif()
 
+# Enable modules to include each other's files
+include_directories(.)
+
 add_subdirectory(app)
 add_subdirectory(audio)
 add_subdirectory(config)
