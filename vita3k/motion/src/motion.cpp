@@ -117,10 +117,12 @@ void refresh_motion(MotionState &state, CtrlState &ctrl_state) {
 #endif
 
     if (!found_accel && !found_gyro) {
-        if (ctrl_state.udp_client.IsConnected())
-            ctrl_state.udp_client.GetGyroAccel(gyro, gyro_timestamp, accel, accel_timestamp);
-        else
+        if (!ctrl_state.udp_client.IsConnected()) {
             return;
+        }
+        ctrl_state.udp_client.GetGyroAccel(gyro, gyro_timestamp, accel, accel_timestamp);
+        // udp client already has the correct magnitude.
+        accel *= -SDL_STANDARD_GRAVITY;
     }
 
     // if timestamp is not available, use the current time instead

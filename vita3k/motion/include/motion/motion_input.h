@@ -10,6 +10,9 @@
 
 class MotionInput {
 public:
+    static constexpr float GyroMaxValue = 5.0f;
+    static constexpr float AccelMaxValue = 7.0f;
+
     explicit MotionInput();
 
     MotionInput(const MotionInput &) = default;
@@ -22,7 +25,7 @@ public:
     void SetAcceleration(const Util::Vec3f &acceleration);
     void SetGyroscope(const Util::Vec3f &gyroscope);
     void SetQuaternion(const Util::Quaternion<SceFloat> &quaternion);
-    void SetGyroThreshold(SceFloat threshold);
+    void SetDeadband(SceFloat threshold);
     void RotateYaw(SceFloat radians);
 
     void EnableGyroBias(bool enable);
@@ -30,6 +33,7 @@ public:
     void EnableDeadband(bool enable);
     void EnableReset(bool reset);
     void ResetRotations();
+    void ResetQuaternion();
 
     void UpdateRotation(SceULong64 elapsed_time);
     void UpdateOrientation(SceULong64 elapsed_time);
@@ -75,7 +79,7 @@ private:
     Util::Vec3f gyro_bias;
 
     // Minimum gyro amplitude to detect if the device is moving
-    SceFloat gyro_threshold = 0.0f;
+    SceFloat gyro_deadband = 0.0f;
 
     // Number of invalid sequential data
     SceFloat reset_counter = 0;
@@ -86,9 +90,11 @@ private:
     // If the provided gyro uses bias correction
     bool bias_enabled = true;
 
-    // Stubbed values
-    bool tilt_correction_enabled = true;
+    // If the provided gyro uses gyro deadband
     bool deadband_enabled = true;
+
+    // Corrects tilt based on accelerometer measurements
+    bool tilt_correction_enabled = true;
 
     // Use accelerometer values to calculate position
     bool only_accelerometer = true;
