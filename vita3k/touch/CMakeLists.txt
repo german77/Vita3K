@@ -1,12 +1,11 @@
-add_library(
-	touch
-	STATIC
-	include/touch/functions.h
-	include/touch/state.h
-	include/touch/touch.h
-	src/touch.cpp
+add_library(touch STATIC
+	functions.h
+	state.h
+	touch.cpp
+	touch.h
 )
 
-target_include_directories(touch PUBLIC include)
+create_target_directory_groups(touch)
+
 target_link_libraries(touch PUBLIC emuenv)
 target_link_libraries(touch PRIVATE display sdl2)
