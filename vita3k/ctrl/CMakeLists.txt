@@ -1,13 +1,12 @@
-add_library(
-	ctrl
-	STATIC
-	include/ctrl/ctrl.h
-	include/ctrl/functions.h
-	include/ctrl/state.h
-	src/ctrl.cpp
+add_library(ctrl STATIC
+	ctrl.cpp
+	ctrl.h
+	functions.h
+	state.h
 )
 
-target_include_directories(ctrl PUBLIC include)
+create_target_directory_groups(ctrl)
+
 target_link_libraries(ctrl PUBLIC emuenv sdl2 util)
 target_link_libraries(ctrl PRIVATE config dialog display kernel)
 
