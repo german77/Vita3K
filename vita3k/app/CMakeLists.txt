@@ -1,10 +1,8 @@
-add_library(
-	app
-	STATIC
-	include/app/functions.h
+add_library(app STATIC
 	include/app/discord.h
-	src/app_init.cpp
+	include/app/functions.h
 	src/app.cpp
+	src/app_init.cpp
 	src/discord.cpp
 )
 

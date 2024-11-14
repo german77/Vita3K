@@ -1,6 +1,4 @@
-add_library(
-	compat
-	STATIC
+add_library(compat STATIC
 	include/compat/functions.h
 	include/compat/state.h
 	src/compat.cpp

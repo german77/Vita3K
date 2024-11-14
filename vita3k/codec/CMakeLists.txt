@@ -1,11 +1,9 @@
-add_library(
-    codec
-    STATIC
+add_library(codec STATIC
     include/codec/state.h
     include/codec/types.h
+    src/aac.cpp
     src/atrac9.cpp
     src/decoder.cpp
-    src/aac.cpp
     src/h264.cpp
     src/mjpeg.cpp
     src/mp3.cpp
