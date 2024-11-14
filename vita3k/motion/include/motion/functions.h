@@ -23,8 +23,11 @@
 SceFVector3 get_acceleration(const MotionState &state);
 SceFVector3 get_gyroscope(const MotionState &state);
 Util::Quaternion<SceFloat> get_orientation(const MotionState &state);
+SceFVector3 get_basic_orientation(const MotionState &state);
 SceBool get_gyro_bias_correction(const MotionState &state);
+SceFloat get_angle_threshold(const MotionState &state);
 void set_gyro_bias_correction(MotionState &state, SceBool setValue);
+void set_angle_threshold(MotionState &state, SceFloat setValue);
 SceBool get_tilt_correction(MotionState &state);
 void set_tilt_correction(MotionState &state, SceBool setValue);
 SceBool get_deadband(MotionState &state);

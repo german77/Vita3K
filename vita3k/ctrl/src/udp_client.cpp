@@ -298,8 +298,8 @@ void UDPClient::GetGyroAccel(Util::Vec3f &gyro, uint64_t &gyro_timestamp, Util::
     gyro.y = -last_pad_data->gyro.yaw * gyro_scale;
     gyro_timestamp = last_pad_data->motion_timestamp;
     accel.x = last_pad_data->accel.x;
-    accel.z = last_pad_data->accel.y;
-    accel.y = last_pad_data->accel.z;
+    accel.z = last_pad_data->accel.z;
+    accel.y = last_pad_data->accel.y;
     accel_timestamp = last_pad_data->motion_timestamp;
 }
 

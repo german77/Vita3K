@@ -1,6 +1,4 @@
-add_library(
-	config
-	STATIC
+add_library(config STATIC
 	include/config/config.h
 	include/config/functions.h
 	include/config/state.h

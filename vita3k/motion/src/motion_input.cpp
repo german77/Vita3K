@@ -10,6 +10,7 @@ MotionInput::MotionInput() {
     // Initialize PID constants with default values
     SetPID(0.3f, 0.005f, 0.0f);
     SetDeadband(0.007f);
+    SetAngleThreshold(45.0f);
     ResetQuaternion();
     ResetRotations();
 }
@@ -62,6 +63,10 @@ void MotionInput::SetDeadband(SceFloat threshold) {
     gyro_deadband = threshold;
 }
 
+void MotionInput::SetAngleThreshold(SceFloat threshold) {
+    angle_threshold = std::clamp(threshold,0.0f, 45.0f);
+}
+
 void MotionInput::RotateYaw(SceFloat radians) {
     const Util::Quaternion<SceFloat> yaw_rotation = {
         { 0.0f, 0.0f, -std::sin(radians / 2) },
@@ -93,6 +98,7 @@ void MotionInput::ResetRotations() {
 
 void MotionInput::ResetQuaternion() {
     quat = { { 0.0f, 0.0f, -1.0f }, 0.0f };
+    basic_orientation = { 0.0f, 0.0f, 1.0f };
 }
 
 bool MotionInput::IsMoving(SceFloat sensitivity) const {
@@ -222,8 +228,38 @@ void MotionInput::UpdateOrientation(SceULong64 elapsed_time) {
     quat = quat.Normalized();
 }
 
+void MotionInput::UpdateBasicOrientation() {
+    SceFloat angle = angle_threshold * 3.1415926 / 180;
+    SceFloat min_angle_threshold = std::sin(angle);
+    SceFloat max_angle_threshold = std::cos(angle);
+
+    if (std::abs(accel.x) < min_angle_threshold) {
+        basic_orientation.x = 0;
+    }
+    if (std::abs(accel.y) < min_angle_threshold) {
+        basic_orientation.y = 0;
+    }
+    if (std::abs(accel.z) < min_angle_threshold) {
+        basic_orientation.z = 0;
+    }
+
+    if (std::abs(accel.x) > max_angle_threshold) {
+        basic_orientation.x = accel.x > 0 ? -1.0f : 1.0f;
+    }
+    if (std::abs(accel.y) > max_angle_threshold) {
+        basic_orientation.y = accel.y > 0 ? -1.0f : 1.0f;
+    }
+    if (std::abs(accel.z) > max_angle_threshold) {
+        basic_orientation.z = accel.z > 0 ? -1.0f : 1.0f;
+    }
+}
+
 Util::Quaternion<float> MotionInput::GetOrientation() const {
     return quat;
+}
+
+Util::Vec3f MotionInput::GetBasicOrientation() const {
+    return basic_orientation;
 }
 
 Util::Vec3f MotionInput::GetAcceleration() const {
@@ -236,6 +272,10 @@ Util::Vec3f MotionInput::GetGyroscope() const {
 
 Util::Vec3f MotionInput::GetRotations() const {
     return rotations;
+}
+
+SceFloat MotionInput::GetAngleThreshold() const{
+    return angle_threshold;
 }
 
 void MotionInput::ResetOrientation() {

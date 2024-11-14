@@ -26,6 +26,7 @@ public:
     void SetGyroscope(const Util::Vec3f &gyroscope);
     void SetQuaternion(const Util::Quaternion<SceFloat> &quaternion);
     void SetDeadband(SceFloat threshold);
+    void SetAngleThreshold(SceFloat threshold);
     void RotateYaw(SceFloat radians);
 
     void EnableGyroBias(bool enable);
@@ -37,11 +38,14 @@ public:
 
     void UpdateRotation(SceULong64 elapsed_time);
     void UpdateOrientation(SceULong64 elapsed_time);
+    void UpdateBasicOrientation();
 
     [[nodiscard]] Util::Quaternion<SceFloat> GetOrientation() const;
+    [[nodiscard]] Util::Vec3f GetBasicOrientation() const;
     [[nodiscard]] Util::Vec3f GetAcceleration() const;
     [[nodiscard]] Util::Vec3f GetGyroscope() const;
     [[nodiscard]] Util::Vec3f GetRotations() const;
+    [[nodiscard]] SceFloat GetAngleThreshold() const;
 
     [[nodiscard]] bool IsMoving(SceFloat sensitivity) const;
     [[nodiscard]] bool IsCalibrated(SceFloat sensitivity) const;
@@ -66,6 +70,9 @@ private:
     // Quaternion containing the device orientation
     Util::Quaternion<SceFloat> quat{ { 0.0f, 0.0f, -1.0f }, 0.0f };
 
+    // Basic orientation
+    Util::Vec3f basic_orientation;
+
     // Number of full rotations in each axis
     Util::Vec3f rotations;
 
@@ -80,6 +87,9 @@ private:
 
     // Minimum gyro amplitude to detect if the device is moving
     SceFloat gyro_deadband = 0.0f;
+
+    // Minimum angle which basic motion orientation changes value
+    SceFloat angle_threshold = 0.0f;
 
     // Number of invalid sequential data
     SceFloat reset_counter = 0;

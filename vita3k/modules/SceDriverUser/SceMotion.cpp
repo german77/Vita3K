@@ -24,9 +24,9 @@
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceMotion);
 
-EXPORT(int, sceMotionGetAngleThreshold) {
+EXPORT(SceFloat, sceMotionGetAngleThreshold) {
     TRACY_FUNC(sceMotionGetAngleThreshold);
-    return UNIMPLEMENTED();
+    return get_angle_threshold(emuenv.motion);
 }
 
 EXPORT(int, sceMotionGetBasicOrientation, SceFVector3 *basicOrientation) {
@@ -35,19 +35,7 @@ EXPORT(int, sceMotionGetBasicOrientation, SceFVector3 *basicOrientation) {
         return RET_ERROR(SCE_MOTION_ERROR_NULL_PARAMETER);
 
     std::lock_guard<std::mutex> guard(emuenv.motion.mutex);
-    SceFVector3 accelerometer = get_acceleration(emuenv.motion);
-
-    *basicOrientation = { 0.f, 0.f, 0.f };
-    // get the basic orientation, only one component is not zero and will be 1 or -1
-    // The basic orientation is determined by gravity, so it uses the Accelerometer value.
-    float max_val = std::max({ std::abs(accelerometer.x), std::abs(accelerometer.y), std::abs(accelerometer.z) });
-    if (max_val == std::abs(accelerometer.x)) {
-        basicOrientation->x = accelerometer.x > 0.0f ? -1.0f : 1.0f;
-    } else if (max_val == std::abs(accelerometer.y)) {
-        basicOrientation->y = accelerometer.y > 0.0f ? -1.0f : 1.0f;
-    } else {
-        basicOrientation->z = accelerometer.z > 0.0f ? -1.0f : 1.0f;
-    }
+    *basicOrientation = get_basic_orientation(emuenv.motion);
 
     return 0;
 }
@@ -211,9 +199,11 @@ EXPORT(int, sceMotionRotateYaw, const float radians) {
     return 0;
 }
 
-EXPORT(int, sceMotionSetAngleThreshold, const float angle) {
+EXPORT(int, sceMotionSetAngleThreshold, SceFloat angle) {
     TRACY_FUNC(sceMotionSetAngleThreshold, angle);
-    return UNIMPLEMENTED();
+    set_angle_threshold(emuenv.motion, angle);
+
+    return 0;
 }
 
 EXPORT(int, sceMotionSetDeadband, SceBool setValue) {
