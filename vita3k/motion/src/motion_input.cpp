@@ -230,26 +230,21 @@ void MotionInput::UpdateOrientation(SceULong64 elapsed_time) {
 
 void MotionInput::UpdateBasicOrientation() {
     SceFloat angle = angle_threshold * 3.1415926 / 180;
-    SceFloat min_angle_threshold = std::sin(angle);
     SceFloat max_angle_threshold = std::cos(angle);
-
-    if (std::abs(accel.x) < min_angle_threshold) {
-        basic_orientation.x = 0;
-    }
-    if (std::abs(accel.y) < min_angle_threshold) {
-        basic_orientation.y = 0;
-    }
-    if (std::abs(accel.z) < min_angle_threshold) {
-        basic_orientation.z = 0;
-    }
 
     if (std::abs(accel.x) > max_angle_threshold) {
         basic_orientation.x = accel.x > 0 ? -1.0f : 1.0f;
+        basic_orientation.y = 0;
+        basic_orientation.z = 0;
     }
     if (std::abs(accel.y) > max_angle_threshold) {
+        basic_orientation.x = 0;
         basic_orientation.y = accel.y > 0 ? -1.0f : 1.0f;
+        basic_orientation.z = 0;
     }
     if (std::abs(accel.z) > max_angle_threshold) {
+        basic_orientation.x = 0;
+        basic_orientation.y = 0;
         basic_orientation.z = accel.z > 0 ? -1.0f : 1.0f;
     }
 }
