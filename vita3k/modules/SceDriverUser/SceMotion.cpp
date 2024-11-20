@@ -99,17 +99,13 @@ EXPORT(int, sceMotionGetSensorState, SceMotionSensorState *sensorState, int numR
         return RET_ERROR(SCE_MOTION_ERROR_NULL_PARAMETER);
     }
 
-    if (emuenv.ctrl.has_motion_support && !emuenv.cfg.disable_motion) {
-        std::lock_guard<std::mutex> guard(emuenv.motion.mutex);
-        sensorState->accelerometer = get_acceleration(emuenv.motion);
-        sensorState->gyro = get_gyroscope(emuenv.motion);
+    std::lock_guard<std::mutex> guard(emuenv.motion.mutex);
+    uint32_t index = emuenv.motion.current_buffer_index;
 
-        sensorState->timestamp = emuenv.motion.last_accel_timestamp;
-        sensorState->counter = emuenv.motion.last_counter;
-        sensorState->hostTimestamp = sensorState->timestamp;
-        sensorState->dataInfo = 0;
-    } else {
-        // some default values
+    // If motion is disabled fill with default values
+    if (!emuenv.ctrl.has_motion_support || emuenv.cfg.disable_motion) {
+        MotionSample &motion_sample = emuenv.motion.ring_buffer_samples[index];
+
         memset(sensorState, 0, sizeof(*sensorState));
         sensorState->accelerometer.z = -1.0;
 
@@ -118,11 +114,41 @@ EXPORT(int, sceMotionGetSensorState, SceMotionSensorState *sensorState, int numR
         sensorState->timestamp = timestamp;
         sensorState->hostTimestamp = timestamp;
 
-        sensorState->counter = emuenv.motion.last_counter++;
+        motion_sample.counter++;
+
+        for (int i = 1; i < numRecords; i++) {
+            sensorState[i] = sensorState[0];
+        }
+
+        return SCE_OK;
     }
 
-    for (int i = 1; i < numRecords; i++)
-        sensorState[i] = sensorState[0];
+    // Fill with unfiltered values
+    for (int i = 0; i < numRecords; i++) {
+        const MotionSample &motion_sample = emuenv.motion.ring_buffer_samples[index];
+
+        sensorState[i].accelerometer = {
+            motion_sample.accel.x,
+            motion_sample.accel.y,
+            motion_sample.accel.z,
+        };
+        sensorState[i].gyro = {
+            motion_sample.accel.x,
+            motion_sample.accel.y,
+            motion_sample.accel.z,
+        };
+        sensorState[i].timestamp = motion_sample.accel_timestamp;
+        sensorState[i].counter = motion_sample.counter;
+        sensorState[i].hostTimestamp = motion_sample.gyro_timestamp;
+        sensorState[i].dataInfo = 0;
+        
+        // Move to previous index
+        if (index == 0) {
+            index = emuenv.motion.ring_buffer_size - 1;
+            continue;
+        }
+        index--;
+    }
 
     return SCE_OK;
 }
