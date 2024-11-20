@@ -163,14 +163,14 @@ void refresh_motion(MotionState &state, CtrlState &ctrl_state) {
 
     next_motion_sample = {
         .counter = current_motion_sample.counter + 1,
-        .gyro_timestamp = gyro_timestamp,
-        .accel_timestamp = accel_timestamp,
+        .timestamp = accel_timestamp,
+        .hostTimestamp = gyro_timestamp,
         .gyro = gyro,
         .accel = accel,
     };
 
     state.motion_data.SetGyroscope(gyro);
     state.motion_data.SetAcceleration(accel);
-    state.motion_data.UpdateRotation(gyro_timestamp - current_motion_sample.gyro_timestamp);
-    state.motion_data.UpdateOrientation(accel_timestamp - current_motion_sample.accel_timestamp);
+    state.motion_data.UpdateRotation(gyro_timestamp - current_motion_sample.hostTimestamp);
+    state.motion_data.UpdateOrientation(accel_timestamp - current_motion_sample.timestamp);
 }

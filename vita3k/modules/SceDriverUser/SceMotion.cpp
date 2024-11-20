@@ -137,9 +137,9 @@ EXPORT(int, sceMotionGetSensorState, SceMotionSensorState *sensorState, int numR
             motion_sample.accel.y,
             motion_sample.accel.z,
         };
-        sensorState[i].timestamp = motion_sample.accel_timestamp;
+        sensorState[i].timestamp = motion_sample.timestamp;
         sensorState[i].counter = motion_sample.counter;
-        sensorState[i].hostTimestamp = motion_sample.gyro_timestamp;
+        sensorState[i].hostTimestamp = motion_sample.hostTimestamp;
         sensorState[i].dataInfo = 0;
         
         // Move to previous index
@@ -165,28 +165,8 @@ EXPORT(int, sceMotionGetState, SceMotionState *motionState) {
         return RET_ERROR(SCE_MOTION_ERROR_NULL_PARAMETER);
     }
 
-    if (emuenv.ctrl.has_motion_support && !emuenv.cfg.disable_motion) {
-        std::lock_guard<std::mutex> guard(emuenv.motion.mutex);
-        motionState->timestamp = emuenv.motion.last_accel_timestamp;
-
-        motionState->acceleration = get_acceleration(emuenv.motion);
-        motionState->angularVelocity = get_gyroscope(emuenv.motion);
-
-        Util::Quaternion dev_quat = get_orientation(emuenv.motion);
-
-        static_assert(sizeof(motionState->deviceQuat) == sizeof(dev_quat));
-        memcpy(&motionState->deviceQuat, &dev_quat, sizeof(motionState->deviceQuat));
-
-        *reinterpret_cast<decltype(dev_quat.ToMatrix()) *>(&motionState->rotationMatrix) = dev_quat.ToMatrix();
-        // not right, but we can't do better without a magnetometer
-        memcpy(&motionState->nedMatrix, &motionState->rotationMatrix, sizeof(motionState->nedMatrix));
-
-        motionState->hostTimestamp = motionState->timestamp;
-        // set it as unstable because we don't have one
-        motionState->magnFieldStability = SCE_MOTION_MAGNETIC_FIELD_UNSTABLE;
-        motionState->dataInfo = 0;
-    } else {
-        // put some default values
+    // If motion is disabled fill with default values
+    if (!emuenv.ctrl.has_motion_support || emuenv.cfg.disable_motion) {
         memset(motionState, 0, sizeof(SceMotionState));
 
         std::chrono::time_point<std::chrono::steady_clock> ts = std::chrono::steady_clock::now();
@@ -201,7 +181,34 @@ EXPORT(int, sceMotionGetState, SceMotionState *motionState) {
             reinterpret_cast<float *>(&motionState->rotationMatrix.x.x)[i * 4 + i] = 1;
             reinterpret_cast<float *>(&motionState->nedMatrix.x.x)[i * 4 + i] = 1;
         }
+
+        CALL_EXPORT(sceMotionGetBasicOrientation, &motionState->basicOrientation);
+        return SCE_OK;
     }
+
+    // Fill with filtered values
+    std::lock_guard<std::mutex> guard(emuenv.motion.mutex);
+    const uint32_t index = emuenv.motion.current_buffer_index;
+    const MotionSample &motion_sample = emuenv.motion.ring_buffer_samples[index];
+
+    motionState->timestamp = motion_sample.timestamp;
+
+    motionState->acceleration = get_acceleration(emuenv.motion);
+    motionState->angularVelocity = get_gyroscope(emuenv.motion);
+
+    Util::Quaternion dev_quat = get_orientation(emuenv.motion);
+
+    static_assert(sizeof(motionState->deviceQuat) == sizeof(dev_quat));
+    memcpy(&motionState->deviceQuat, &dev_quat, sizeof(motionState->deviceQuat));
+
+    *reinterpret_cast<decltype(dev_quat.ToMatrix()) *>(&motionState->rotationMatrix) = dev_quat.ToMatrix();
+    // not right, but we can't do better without a magnetometer
+    memcpy(&motionState->nedMatrix, &motionState->rotationMatrix, sizeof(motionState->nedMatrix));
+
+    motionState->hostTimestamp = motion_sample.hostTimestamp;
+    // set it as unstable because we don't have one
+    motionState->magnFieldStability = SCE_MOTION_MAGNETIC_FIELD_UNSTABLE;
+    motionState->dataInfo = 0;
 
     CALL_EXPORT(sceMotionGetBasicOrientation, &motionState->basicOrientation);
     return SCE_OK;

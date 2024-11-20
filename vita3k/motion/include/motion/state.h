@@ -24,8 +24,8 @@
 
 struct MotionSample {
     uint32_t counter = 0;
-    uint64_t gyro_timestamp = 0;
-    uint64_t accel_timestamp = 0;
+    uint64_t timestamp = 0;
+    uint64_t hostTimestamp = 0;
     Util::Vec3f gyro{};
     Util::Vec3f accel{};
 };
