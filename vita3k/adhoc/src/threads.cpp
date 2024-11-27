@@ -102,7 +102,7 @@ int adhocMatchingInputThread(EmuEnvState *emuenv, int id) {
                 }
 
                 // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
-            } while (fromAddr->sin_addr.s_addr == ctx->ownAddress || *ctx->rxbuf != 1);
+            } while (fromAddr->sin_addr.S_un.S_addr == ctx->ownAddress || *ctx->rxbuf != 1);
             // we have a packet :D, but may be unfinished, check how long it is and see if we can get the remaining
 
             SceUShort16 nPacketLength; // network byte order of packet length
@@ -111,11 +111,11 @@ int adhocMatchingInputThread(EmuEnvState *emuenv, int id) {
         } while (res < packetLength + 4);
         // We received the whole packet, we can now commence the parsing and the fun
         emuenv->adhoc.mutex.lock();
-        auto foundTarget = ctx->findTargetByAddr(fromAddr->sin_addr.s_addr);
+        auto foundTarget = ctx->findTargetByAddr(fromAddr->sin_addr.S_un.S_addr);
         if (foundTarget == nullptr) {
             uint8_t targetMode = *(ctx->rxbuf + 1);
             if (((targetMode == SCE_NET_ADHOC_MATCHING_MODE_CHILD) && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_P2P))) || ((targetMode == SCE_NET_ADHOC_MATCHING_MODE_PARENT && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_CHILD || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_P2P)))))) {
-                foundTarget = ctx->newTarget(fromAddr->sin_addr.s_addr);
+                foundTarget = ctx->newTarget(fromAddr->sin_addr.S_un.S_addr);
             }
 
             if (((foundTarget->msg.flags & 1U) == 0)) {
