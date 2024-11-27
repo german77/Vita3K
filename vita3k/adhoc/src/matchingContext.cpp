@@ -21,11 +21,31 @@
 #include <emuenv/state.h>
 #include <kernel/state.h>
 #include <net/types.h>
-#include <sys/socket.h>
 #include <thread>
 #include <util/types.h>
 
 #include <cstring>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <Ws2tcpip.h>
+#include <iphlpapi.h>
+#include <winsock2.h>
+#undef s_addr
+typedef SOCKET abs_socket;
+typedef int socklen_t;
+#else
+#include <arpa/inet.h>
+#include <cerrno>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <unistd.h>
+typedef int abs_socket;
+#endif
 
 bool SceNetAdhocMatchingContext::initSendSocket(EmuEnvState &emuenv, SceUID thread_id) {
     SceNetInAddr ownAddr;
@@ -48,7 +68,7 @@ bool SceNetAdhocMatchingContext::initSendSocket(EmuEnvState &emuenv, SceUID thre
         return false;
     }
 
-    int flag = 1;
+    char flag = 1;
     if (setsockopt(this->sendSocket, SOL_SOCKET, SO_BROADCAST, &flag, sizeof(flag)) < 0)
         return false; // what to return here
 
@@ -56,11 +76,11 @@ bool SceNetAdhocMatchingContext::initSendSocket(EmuEnvState &emuenv, SceUID thre
 }
 
 bool SceNetAdhocMatchingContext::initEventHandler(EmuEnvState &emuenv) {
-    auto pipesResult = pipe(this->pipesFd);
+    /* auto pipesResult = pipe(this->pipesFd);
     if (pipesResult == -1) {
         assert(false);
         return false;
-    }
+    }*/
 
     this->eventThread = std::thread(adhocMatchingEventThread, &emuenv, this->id);
     return true;
@@ -107,7 +127,12 @@ void SceNetAdhocMatchingContext::unInitInputThread() {
     if (this->inputThread.joinable())
         this->inputThread.join();
 
+#ifdef _WIN32
+    shutdown(this->recvSocket, SD_BOTH);
+#else
     shutdown(this->recvSocket, SHUT_RDWR);
+#endif
+
     close(this->recvSocket);
     this->recvSocket = 0;
 }
@@ -315,7 +340,7 @@ bool SceNetAdhocMatchingContext::broadcastHello() {
     send_addr.sin_addr.s_addr = INADDR_BROADCAST;
 #endif
 
-    auto sendResult = sendto(this->sendSocket, &this->hello, this->totalHelloLength, 0, (sockaddr *)&send_addr, sizeof(send_addr));
+    auto sendResult = sendto(this->sendSocket, this->hello, this->totalHelloLength, 0, (sockaddr *)&send_addr, sizeof(send_addr));
 
     if (sendResult == EAGAIN)
         sendResult = 0;
@@ -458,9 +483,9 @@ void SceNetAdhocMatchingContext::generateAddrsMsg() {
     this->addrMsg = (char *)msg;
 }
 void SceNetAdhocMatchingContext::getMembers(unsigned int *membersNum, SceNetAdhocMatchingMember *members) {
-    uint uVar1;
+    unsigned int uVar1;
     int currentSize;
-    uint otherI;
+    unsigned int otherI;
     SceNetAdhocMatchingMember *dst;
     int totalSize;
     SceSize i;
