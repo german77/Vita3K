@@ -49,6 +49,7 @@ struct SceNetAdhocHandlerArguments {
 static_assert(sizeof(SceNetAdhocHandlerArguments) == 20);
 
 enum SceNetAdhocMatchingErrorCode {
+    SCE_NET_ADHOC_MATCHING_OK = 0x0,
     SCE_NET_ADHOC_MATCHING_ERROR_INVALID_MODE = 0x80413101,
     SCE_NET_ADHOC_MATCHING_ERROR_INVALID_PORT = 0x80413102,
     SCE_NET_ADHOC_MATCHING_ERROR_INVALID_MAXNUM = 0x80413103,
@@ -77,9 +78,11 @@ enum SceNetAdhocMatchingErrorCode {
 };
 
 enum SceNetAdhocMatchingMode : uint8_t {
-    SCE_NET_ADHOC_MATCHING_MODE_PARENT = 1,
+    SCE_NET_ADHOC_MATCHING_MODE_P2P,
+    SCE_NET_ADHOC_MATCHING_MODE_PARENT,
     SCE_NET_ADHOC_MATCHING_MODE_CHILD,
-    SCE_NET_ADHOC_MATCHING_MODE_P2P
+    SCE_NET_ADHOC_MATCHING_MODE_UDP,
+    SCE_NET_ADHOC_MATCHING_MODE_MAX,
 };
 
 enum SceNetAdhocMatchingHandlerEventType {
@@ -140,6 +143,14 @@ enum SceNetAdhocMatchingEvent : uint32_t {
     SCE_NET_ADHOC_MATCHING_EVENT_UNK5 = 5,
 };
 
+enum SceNetAdhocMatchingTargetStatus : uint32_t {
+    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_1 = 1,
+    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2 = 2,
+    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES = 3,
+    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2 = 4,
+    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED = 5,
+};
+
 struct SceNetAdhocMatchingTarget;
 
 struct SceNetAdhocMatchingPipeMessage {
@@ -154,7 +165,7 @@ struct SceNetAdhocMatchingMember {
 
 struct SceNetAdhocMatchingTarget {
     SceNetAdhocMatchingTarget *next;
-    int status;
+    SceNetAdhocMatchingTargetStatus status;
     SceNetInAddr addr;
     int rawPacketLength;
     char *rawPacket;
@@ -244,10 +255,10 @@ struct SceNetAdhocMatchingContext {
 
     void notifyHandler(EmuEnvState *emuenv, int event, SceNetInAddr *peer, int optLen, void *opt);
 
-    bool initSendSocket(EmuEnvState &emuenv, SceUID thread_id);
-    bool initEventHandler(EmuEnvState &emuenv);
-    bool initInputThread(EmuEnvState &emuenv);
-    bool initCalloutThread(EmuEnvState &emuenv);
+    bool InitializeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
+    bool InitializeEventHandler(EmuEnvState &emuenv);
+    bool InitializeInputThread(EmuEnvState &emuenv);
+    bool InitializeCalloutThread(EmuEnvState &emuenv);
 
     void unInitInputThread();
     void unInitEventThread();
@@ -266,14 +277,28 @@ struct SceNetAdhocMatchingContext {
     bool setHelloOpt(int optlen, void *opt);
 };
 
-struct AdhocState {
-    bool inited = false;
+class AdhocState {
+public:
+    int InitializeMutex();
+    int DeleteMutex();
+    std::mutex& GetMutex();
+
+    int CreateMSpace(SceSize poolsize, void *poolptr);
+    int DeleteMSpace();
+
+    int InitializeContextList();
+    int IsAnyContextRunning();
+    SceNetAdhocMatchingContext *findMatchingContextById(int id);
+    int createAdhocMatchingContext(SceUShort16 port);
+    void DestroyContext(SceNetAdhocMatchingContext* ctx);
+    void DestroyAllContext();
+
+    bool is_initialized = false;
+
+private:
     std::mutex mutex;
     SceUID next_uid = 0;
     SceNetInAddr addr;
     SceNetAdhocMatchingContext *adhocMatchingContextsList = NULL;
     SceUID matchingCtxCount = 1;
-
-    SceNetAdhocMatchingContext *findMatchingContext(int id);
-    int createAdhocMatchingContext(SceUShort16 port);
 };
