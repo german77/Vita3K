@@ -1,8 +1,9 @@
 add_library(
     adhoc
     STATIC
-    src/state.cpp
+    src/calloutSyncing.cpp
     src/matchingContext.cpp
+    src/state.cpp
     src/threads.cpp
 )
 
