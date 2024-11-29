@@ -144,7 +144,7 @@ enum SceNetAdhocMatchingEvent : uint32_t {
 };
 
 enum SceNetAdhocMatchingTargetStatus : uint32_t {
-    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_1 = 1,
+    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED = 1,
     SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2 = 2,
     SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES = 3,
     SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2 = 4,
@@ -286,19 +286,22 @@ public:
     int CreateMSpace(SceSize poolsize, void *poolptr);
     int DeleteMSpace();
 
-    int InitializeContextList();
-    int IsAnyContextRunning();
+    int InitializeMatchingContextList();
+    int IsAnyMatchingContextRunning();
     SceNetAdhocMatchingContext *findMatchingContextById(int id);
-    int createAdhocMatchingContext(SceUShort16 port);
-    void DestroyContext(SceNetAdhocMatchingContext* ctx);
-    void DestroyAllContext();
+    int createMatchingContext(SceUShort16 port);
+    void DestroyMatchingContext(SceNetAdhocMatchingContext *ctx);
+    void DestroyAllMatchingContext();
 
+public: // Globals
     bool is_initialized = false;
+    SceNetInAddr addr;
+    SceUID next_uid = 0;
 
 private:
+    bool is_mutex_initialized = false;
+
     std::mutex mutex;
-    SceUID next_uid = 0;
-    SceNetInAddr addr;
-    SceNetAdhocMatchingContext *adhocMatchingContextsList = NULL;
+    SceNetAdhocMatchingContext *contextList = NULL;
     SceUID matchingCtxCount = 1;
 };

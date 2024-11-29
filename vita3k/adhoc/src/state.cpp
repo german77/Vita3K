@@ -17,61 +17,145 @@
 
 #include <adhoc/state.h>
 
-SceNetAdhocMatchingContext *AdhocState::findMatchingContext(int id) {
+int AdhocState::InitializeMutex() {
+    // Initialize mutex
+    is_mutex_initialized = true;
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+int AdhocState::DeleteMutex() {
+    if (is_mutex_initialized) {
+        // Delete mutex
+    }
+    is_mutex_initialized = false;
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+std::mutex &AdhocState::GetMutex() {
+    return mutex;
+}
+
+int AdhocState::CreateMSpace(SceSize poolsize, void *poolptr) {
+    // Just a placeholder. We don't really need this kind of allocation
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+int AdhocState::DeleteMSpace() {
+    // Just a placeholder. We don't really need this kind of allocation
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+int AdhocState::InitializeMatchingContextList() {
+    contextList = nullptr;
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+int AdhocState::IsAnyMatchingContextRunning() {
+    SceNetAdhocMatchingContext *context = contextList;
+    for (; context != nullptr; context = context->next) {
+        if (context->status != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING)
+            return SCE_NET_ADHOC_MATCHING_ERROR_BUSY;
+    }
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(int id) {
     // Iterate Matching Context List
-    SceNetAdhocMatchingContext *item = adhocMatchingContextsList;
-    for (; item != nullptr; item = item->next) { // Found Matching ID
-        if (item->id == id)
-            return item;
+    SceNetAdhocMatchingContext *context = contextList;
+    for (; context != nullptr; context = context->next) {
+        if (context->id != id)
+            continue;
+        // Found Matching ID
+        return context;
     }
 
     // Context not found
     return nullptr;
 };
 
-int AdhocState::createAdhocMatchingContext(SceUShort16 port) {
-    SceNetAdhocMatchingContext *item = adhocMatchingContextsList;
+int AdhocState::createMatchingContext(SceUShort16 port) {
+    SceNetAdhocMatchingContext *context = contextList;
 
     // Check for port conflicts
-    for (; item != nullptr; item = item->next) {
-        if (item->port == port)
-            return SCE_NET_ADHOC_MATCHING_ERROR_PORT_IN_USE;
+    for (; context != nullptr; context = context->next) {
+         if (context->port != port)
+            continue;
+        return SCE_NET_ADHOC_MATCHING_ERROR_PORT_IN_USE;
     }
 
-    // TODO: refactor this
-    // Get free id
-    int iVar2 = 1;
+    int next_id = 1;
     if (matchingCtxCount != SCE_NET_ADHOC_MATCHING_MAXNUM - 1)
-        iVar2 = matchingCtxCount + 1;
+        next_id = matchingCtxCount + 1;
 
-    int id;
-    SceNetAdhocMatchingContext *paVar1;
     do {
-        id = iVar2;
-        if (id == matchingCtxCount) {
+        // We did a full loop. There are no id available.
+        if (next_id == matchingCtxCount) {
             return SCE_NET_ADHOC_MATCHING_ERROR_ID_NOT_AVAIL;
         }
 
-        const auto paVar1 = findMatchingContext(id);
-        if (paVar1 == nullptr) {
-            if (id < 0) {
-                matchingCtxCount = id;
-                return id;
-            }
-            matchingCtxCount = id;
-            const auto ctx = new SceNetAdhocMatchingContext();
+        context = findMatchingContextById(next_id);
 
-            if (ctx == nullptr) {
-                return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
+        // This id is already in use. Find next id.
+        if (context != nullptr) {
+            next_id++;
+            if (next_id >= SCE_NET_ADHOC_MATCHING_MAXNUM) {
+                next_id = 1;
             }
-            ctx->id = id;
-            ctx->next = adhocMatchingContextsList;
-            adhocMatchingContextsList = ctx;
-            return id;
+            continue;
         }
-        iVar2 = 1;
-        if (id != SCE_NET_ADHOC_MATCHING_MAXNUM - 1) {
-            iVar2 = id + 1;
+
+        // Return if an error occured
+        if (next_id < SCE_NET_ADHOC_MATCHING_OK) {
+            matchingCtxCount = next_id;
+            return next_id;
         }
+
+        matchingCtxCount = next_id;
+        const auto ctx = new SceNetAdhocMatchingContext();
+
+        if (ctx == nullptr) {
+            return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
+        }
+
+        // Add new element to the list
+        ctx->id = next_id;
+        ctx->next = contextList;
+        contextList = ctx;
+        return next_id;
     } while (true);
+}
+
+void AdhocState::DestroyMatchingContext(SceNetAdhocMatchingContext *ctx) {
+    SceNetAdhocMatchingContext *context = contextList;
+    SceNetAdhocMatchingContext *previous_ctx = nullptr;
+    for (; context != nullptr; context = context->next) {
+        if (ctx != context) {
+            previous_ctx = context;
+            continue;
+        }
+
+        if (previous_ctx != nullptr) {
+            previous_ctx->next = context->next;
+            break;
+        }
+        
+        contextList = context->next;
+        break;
+    }
+
+    delete ctx;
+};
+
+void AdhocState::DestroyAllMatchingContext() {
+    SceNetAdhocMatchingContext *context = contextList;
+    while (context != nullptr) {
+        auto *next_ctx = context->next;
+
+        delete context->rxbuf;
+        context->rxbuf = nullptr;
+
+        delete context;
+        context = next_ctx;
+    }
+    contextList = nullptr;
 };
