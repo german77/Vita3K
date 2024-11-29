@@ -183,6 +183,11 @@ struct SceNetAdhocMatchingTarget {
     unsigned int packetLength;
     unsigned int keepAliveInterval;
     SceNetAdhocMatchingPipeMessage msg;
+    bool unk_54;
+    bool unk_58;
+    int type_68;
+    bool is_88_pending;
+    bool is_a0_pending;
 };
 
 struct SceNetAdhocMatchingCalloutFunction {
@@ -199,19 +204,11 @@ struct SceNetAdhocMatchingCalloutSyncing {
     std::map<int (*)(void *), SceNetAdhocMatchingCalloutFunction> functions;
 };
 
-class SceNetAdhocMatchingContext {
-public:
-    void SetTarget68Type(SceNetAdhocMatchingTarget *target, int type);
-    void SetTargetStatus(SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingTargetStatus status);
-    SceNetAdhocMatchingTarget *newTarget(uint32_t addr);
-    SceNetAdhocMatchingTarget *findTargetByAddr(uint32_t addr);
-    
+struct SceNetAdhocMatchingContext {
     int addTimedFunc(int (*entry)(void *), void *arg, uint64_t timeFromNow);
     bool searchTimedFunc(int (*entry)(void *));
     int delTimedFunc(int (*entry)(void *));
 
-    void processPacketFromPeer(EmuEnvState *emuenv, SceNetAdhocMatchingTarget *peer);
-    SceSize countTargetsWithStatusOrBetter(SceNetAdhocMatchingTargetStatus status);
     void destroy(EmuEnvState &emuenv, SceUID thread_id, const char *export_name);
 
     void notifyHandler(EmuEnvState *emuenv, int event, SceNetInAddr *peer, int optLen, void *opt);
@@ -228,12 +225,19 @@ public:
 
     bool InitializeCalloutThread(EmuEnvState &emuenv);
 
-    void unInitAddrMsg();
+    void processPacketFromTarget(EmuEnvState *emuenv, SceNetAdhocMatchingTarget *peer);
 
-    void getAddressesWithStatusOrBetter(int status, SceNetInAddr *addrs, int *pCount);
-
-    int createMembersList();
+    // Target
+    void SetTarget68Type(SceNetAdhocMatchingTarget *target, int type);
+    void SetTargetStatus(SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingTargetStatus status);
+    SceNetAdhocMatchingTarget *newTarget(uint32_t addr);
+    SceNetAdhocMatchingTarget *findTargetByAddr(uint32_t addr);
     void getTargetAddrList(SceNetAdhocMatchingTargetStatus status, SceNetInAddr *addrList, SceSize &addrListSize);
+    SceSize countTargetsWithStatusOrBetter(SceNetAdhocMatchingTargetStatus status);
+    bool isTargetAddressHigher(SceNetAdhocMatchingTarget *target);
+
+    // Member list message
+    int createMembersList();
     int getMembers(SceSize *membersNum, SceNetAdhocMatchingMember *members);
     int sendMemberListToTarget(SceNetAdhocMatchingTarget *target);
     int processMemberPacket(char *packet, SceSize packetLength);
