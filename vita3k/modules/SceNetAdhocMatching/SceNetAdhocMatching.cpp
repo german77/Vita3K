@@ -128,7 +128,7 @@ EXPORT(int, sceNetAdhocMatchingCreate, int mode, int maxnum, SceUShort16 port, i
     if (initCount < 0 || rexmtInterval == 0)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    const auto id = emuenv.adhoc.createAdhocMatchingContext(port);
+    const auto id = emuenv.adhoc.createMatchingContext(port);
 
     if (id < SCE_NET_ADHOC_MATCHING_OK)
         return RET_ERROR(id);
@@ -218,7 +218,7 @@ EXPORT(int, sceNetAdhocMatchingDelete, int id) {
 
     delete ctx->rxbuf;
     ctx->rxbuf = nullptr;
-    emuenv.adhoc.DestroyContext(ctx);
+    emuenv.adhoc.DestroyMatchingContext(ctx);
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }
@@ -294,7 +294,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
     if (0 < optlen && opt == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_OPTLEN);
 
-    auto membersCount = ctx->CountTargetsWithAtLeastThisStatus(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES);
+    auto membersCount = ctx->countTargetsWithStatusOrBetter(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES);
     switch (foundTarget->status) {
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED:
         if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT)
@@ -462,7 +462,7 @@ EXPORT(int, sceNetAdhocMatchingInit, SceSize poolsize, void *poolptr) {
         return result;
     }
 
-    result = emuenv.adhoc.InitializeContextList();
+    result = emuenv.adhoc.InitializeMatchingContextList();
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
         emuenv.adhoc.DeleteMSpace();
         return result;
@@ -492,13 +492,12 @@ EXPORT(int, sceNetAdhocMatchingTerm) {
 
         delete ctx->rxbuf;
         ctx->rxbuf = nullptr;
-        emuenv.adhoc.DestroyContext(ctx);
+        emuenv.adhoc.DestroyMatchingContext(ctx);
     }
 
-    int result = emuenv.adhoc.IsAnyContextRunning();
+    int result = emuenv.adhoc.IsAnyMatchingContextRunning();
     if (result == SCE_NET_ADHOC_MATCHING_OK) {
-        emuenv.adhoc.DestroyAllContext();
-        emuenv.adhoc.DeleteMSpace();
+        emuenv.adhoc.DestroyAllMatchingContext();
         emuenv.adhoc.DeleteMutex();
         emuenv.adhoc.is_initialized = false;
     }
