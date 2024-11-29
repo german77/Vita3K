@@ -155,7 +155,7 @@ EXPORT(int, sceNetAdhocMatchingCreate, int mode, int maxnum, SceUShort16 port, i
 
     ctx->shouldHelloReqBeProcessed = false;
     // We are missing some variables here 6c-6d
-    ctx->targets = nullptr;
+    ctx->targetList = nullptr;
 
     SceNetAdhocMatchingHandler handler{
         .entry = handlerAddr,
@@ -223,7 +223,7 @@ EXPORT(int, sceNetAdhocMatchingDelete, int id) {
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-EXPORT(int, sceNetAdhocMatchingGetHelloOpt, int id, int *optlen, void *opt) {
+EXPORT(int, sceNetAdhocMatchingGetHelloOpt, int id, SceSize *optlen, void *opt) {
     TRACY_FUNC(sceNetAdhocMatchingGetHelloOpt, id, optlen, opt);
 
     if (!emuenv.adhoc.is_initialized)
@@ -431,7 +431,7 @@ EXPORT(int, sceNetAdhocMatchingStart, int id, int threadPriority, int threadStac
         ctx->addTimedFunc(sendHelloReqToPipe, ctx, ctx->helloInterval);
     }
 
-    ctx->CreateMemberList();
+    ctx->createMembersList();
 
     ctx->status = SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_RUNNING;
 
