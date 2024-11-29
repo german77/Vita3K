@@ -24,6 +24,7 @@
 #include <kernel/callback.h>
 #include <mem/util.h>
 #include <mutex>
+#include <vector>
 #include <net/state.h>
 
 #define SCE_NET_ADHOC_MATCHING_MAXNUM 16
@@ -101,11 +102,6 @@ enum SceNetAdhocMatchingHandlerEventType {
     SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_TIMEOUT = 13
 };
 
-struct SceNetAdhocMatchingHandler {
-    Ptr<void> entry;
-    ThreadStatePtr thread;
-};
-
 enum SceNetAdhocMatchingPacketType : uint8_t {
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO = 1,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK2 = 2,
@@ -118,21 +114,6 @@ enum SceNetAdhocMatchingPacketType : uint8_t {
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9 = 9,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK10 = 10,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK11 = 11
-};
-
-struct SceNetAdhocMatchingHelloStart {
-    uint8_t one; //! ALWAYS 1
-    uint8_t packetType;
-    SceUShort16 nPacketLength;
-    int nHelloInterval;
-    int nRexmtInterval;
-    // After this struct its where optional data is supposed to go
-    // After optional data theres 16 bytes which idk what they are lmfao
-};
-
-struct SceNetAdhocMatchingHelloEnd {
-    unsigned int unk1;
-    uint8_t unk2[12];
 };
 
 enum SceNetAdhocMatchingEvent : uint32_t {
@@ -151,6 +132,28 @@ enum SceNetAdhocMatchingTargetStatus : uint32_t {
     SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED = 5,
 };
 
+enum SceNetAdhocMatchingContextStatus {
+    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING = 0,
+    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_STOPPING = 1,
+    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_RUNNING = 2,
+};
+
+struct SceNetAdhocMatchingHandler {
+    Ptr<void> entry;
+    ThreadStatePtr thread;
+};
+
+struct SceNetAdhocMatchingHelloMessage {
+    uint8_t one; //! ALWAYS 1
+    SceNetAdhocMatchingPacketType type;
+    SceUShort16 packetLength;
+    int helloInterval;
+    int rexmtInterval;
+    std::vector<char> optBuffer;
+    int unk_6c;
+    char zero[0xc];
+};
+
 struct SceNetAdhocMatchingTarget;
 
 struct SceNetAdhocMatchingPipeMessage {
@@ -163,6 +166,14 @@ struct SceNetAdhocMatchingMember {
     SceNetInAddr addr;
 };
 
+struct SceNetAdhocMatchingMemberMessage {
+    uint8_t one;
+    SceNetAdhocMatchingPacketType type;
+    SceUShort16 packetLength;
+    SceNetInAddr parent;
+    std::vector<SceNetInAddr> members;
+};
+
 struct SceNetAdhocMatchingTarget {
     SceNetAdhocMatchingTarget *next;
     SceNetAdhocMatchingTargetStatus status;
@@ -172,19 +183,6 @@ struct SceNetAdhocMatchingTarget {
     unsigned int packetLength;
     unsigned int keepAliveInterval;
     SceNetAdhocMatchingPipeMessage msg;
-};
-
-struct SceNetAdhocMatchingAddrMsgStart {
-    uint8_t one;
-    uint8_t type;
-    SceUShort16 packetLength;
-    uint32_t ownAddress;
-};
-
-enum SceNetAdhocMatchingContextStatus {
-    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING = 0,
-    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_STOPPING = 1,
-    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_RUNNING = 2,
 };
 
 struct SceNetAdhocMatchingCalloutFunction {
@@ -201,7 +199,53 @@ struct SceNetAdhocMatchingCalloutSyncing {
     std::map<int (*)(void *), SceNetAdhocMatchingCalloutFunction> functions;
 };
 
-struct SceNetAdhocMatchingContext {
+class SceNetAdhocMatchingContext {
+public:
+    void SetTarget68Type(SceNetAdhocMatchingTarget *target, int type);
+    void SetTargetStatus(SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingTargetStatus status);
+    SceNetAdhocMatchingTarget *newTarget(uint32_t addr);
+    SceNetAdhocMatchingTarget *findTargetByAddr(uint32_t addr);
+    
+    int addTimedFunc(int (*entry)(void *), void *arg, uint64_t timeFromNow);
+    bool searchTimedFunc(int (*entry)(void *));
+    int delTimedFunc(int (*entry)(void *));
+
+    void processPacketFromPeer(EmuEnvState *emuenv, SceNetAdhocMatchingTarget *peer);
+    SceSize countTargetsWithStatusOrBetter(SceNetAdhocMatchingTargetStatus status);
+    void destroy(EmuEnvState &emuenv, SceUID thread_id, const char *export_name);
+
+    void notifyHandler(EmuEnvState *emuenv, int event, SceNetInAddr *peer, int optLen, void *opt);
+
+    
+    bool initializeInputThread(EmuEnvState &emuenv);
+    void closeInputThread();
+
+    bool initializeEventHandler(EmuEnvState &emuenv);
+    void closeEventHandler();
+
+    bool InitializeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
+    void closeSendSocket();
+
+    bool InitializeCalloutThread(EmuEnvState &emuenv);
+
+    void unInitAddrMsg();
+
+    void getAddressesWithStatusOrBetter(int status, SceNetInAddr *addrs, int *pCount);
+
+    int createMembersList();
+    void getTargetAddrList(SceNetAdhocMatchingTargetStatus status, SceNetInAddr *addrList, SceSize &addrListSize);
+    int getMembers(SceSize *membersNum, SceNetAdhocMatchingMember *members);
+    int sendMemberListToTarget(SceNetAdhocMatchingTarget *target);
+    int processMemberPacket(char *packet, SceSize packetLength);
+    int clearMemberList();
+
+    // Hello optional data
+    int getHelloOpt(SceSize *oOptlen, void *oOpt);
+    int setHelloOpt(SceSize optlen, void *opt);
+    int broadcastHello();
+    void resetHelloOpt();
+    void resetHelloFunction();
+
     SceNetAdhocMatchingContext *next;
     int id;
     SceNetAdhocMatchingContextStatus status = SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING;
@@ -226,62 +270,26 @@ struct SceNetAdhocMatchingContext {
     int pipesFd[2]; // 0 = read, 1 = write
 
     unsigned int totalHelloLength;
-    char *hello;
+    SceNetAdhocMatchingHelloMessage *helloMsg;
     bool shouldHelloReqBeProcessed;
 
     uint32_t ownAddress;
 
-    int addrMsgLen;
-    char *addrMsg;
-
-    int memberCount;
+    SceSize memberMsgSize;
+    SceNetAdhocMatchingMemberMessage* memberMsg;
 
     SceNetAdhocMatchingPipeMessage helloPipeMsg;
 
     SceNetAdhocMatchingCalloutSyncing calloutSyncing;
 
-    SceNetAdhocMatchingTarget *targets;
-    SceNetAdhocMatchingTarget *findTargetByAddr(uint32_t addr);
-    SceNetAdhocMatchingTarget *newTarget(uint32_t addr);
-    void generateAddrsMsg();
-
-    int addTimedFunc(int (*entry)(void *), void *arg, uint64_t timeFromNow);
-    bool searchTimedFunc(int (*entry)(void *));
-    int delTimedFunc(int (*entry)(void *));
-
-    void processPacketFromPeer(EmuEnvState *emuenv, SceNetAdhocMatchingTarget *peer);
-    int countTargetsWithStatusOrBetter(int status);
-    void destroy(EmuEnvState &emuenv, SceUID thread_id, const char *export_name);
-
-    void notifyHandler(EmuEnvState *emuenv, int event, SceNetInAddr *peer, int optLen, void *opt);
-
-    bool InitializeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
-    bool InitializeEventHandler(EmuEnvState &emuenv);
-    bool InitializeInputThread(EmuEnvState &emuenv);
-    bool InitializeCalloutThread(EmuEnvState &emuenv);
-
-    void unInitInputThread();
-    void unInitEventThread();
-    void unInitAddrMsg();
-    void unInitHelloMsg();
-    void unInitSendSocket();
-
-    bool broadcastHello();
-
-    void getAddressesWithStatusOrBetter(int status, SceNetInAddr *addrs, int *pCount);
-
-    void getMembers(unsigned int *membersNum, SceNetAdhocMatchingMember *members);
-
-    // Hello optional data
-    bool getHelloOpt(int *oOptlen, void *oOpt);
-    bool setHelloOpt(int optlen, void *opt);
+    SceNetAdhocMatchingTarget *targetList;
 };
 
 class AdhocState {
 public:
     int InitializeMutex();
     int DeleteMutex();
-    std::mutex& GetMutex();
+    std::mutex &GetMutex();
 
     int CreateMSpace(SceSize poolsize, void *poolptr);
     int DeleteMSpace();
