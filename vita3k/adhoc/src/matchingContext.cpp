@@ -212,14 +212,6 @@ int SceNetAdhocMatchingContext::addTimedFunc(int (*entry)(void *), void *arg, ui
     return 0;
 };
 
-void SceNetAdhocMatchingContext::unInitHelloMsg() {
-    if (this->totalHelloLength <= 0)
-        return;
-
-    delete this->hello;
-    this->hello = nullptr;
-    this->totalHelloLength = 0;
-}
 bool SceNetAdhocMatchingContext::searchTimedFunc(int (*entry)(void *)) {
     std::lock_guard guard(this->calloutSyncing.calloutMutex);
 
@@ -285,73 +277,6 @@ void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState *emuenv, int event, S
     free(emuenv->mem, data); // free arguments
 };
 
-bool SceNetAdhocMatchingContext::getHelloOpt(int *oOptlen, void *oOpt) {
-    int optLen = this->totalHelloLength - sizeof(SceNetAdhocMatchingHelloStart);
-
-    if (oOpt != nullptr && 0 < optLen) {
-        // Whichever is less to not write more than app allocated for opt data
-        if (*oOptlen < optLen)
-            optLen = *oOptlen;
-
-        memcpy(oOpt, this->hello + sizeof(SceNetAdhocMatchingHelloStart), optLen);
-    }
-    *oOptlen = optLen;
-
-    return true;
-};
-
-bool SceNetAdhocMatchingContext::setHelloOpt(int optlen, void *opt) {
-    auto hi = new char[sizeof(SceNetAdhocMatchingHelloStart) + optlen + sizeof(SceNetAdhocMatchingHelloEnd)];
-    this->totalHelloLength = sizeof(SceNetAdhocMatchingHelloStart) + optlen + sizeof(SceNetAdhocMatchingHelloEnd);
-
-    if (this->hello != nullptr)
-        delete this->hello;
-    this->hello = hi;
-
-    ((SceNetAdhocMatchingHelloStart *)hi)->one = 1;
-    ((SceNetAdhocMatchingHelloStart *)hi)->packetType = SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO;
-
-    auto nRexmtInterval = htonl(this->rexmtInterval);
-    memcpy(&((SceNetAdhocMatchingHelloStart *)hi)->nRexmtInterval, &nRexmtInterval, sizeof(nRexmtInterval));
-
-    auto nHelloInterval = htonl(this->helloInterval);
-    memcpy(&((SceNetAdhocMatchingHelloStart *)hi)->nHelloInterval, &nHelloInterval, sizeof(nHelloInterval));
-
-    auto packetLength = htons(optlen + sizeof(nRexmtInterval) + sizeof(nHelloInterval));
-    memcpy(&((SceNetAdhocMatchingHelloStart *)hi)->nPacketLength, &packetLength, sizeof(packetLength));
-
-    memcpy(hi + sizeof(SceNetAdhocMatchingHelloStart), opt, optlen);
-
-    uint32_t NUMBAONE = 1;
-    memcpy(&((SceNetAdhocMatchingHelloEnd *)(hi + sizeof(SceNetAdhocMatchingHelloStart) + optlen))->unk1, &NUMBAONE, sizeof(NUMBAONE));
-    memset(&((SceNetAdhocMatchingHelloEnd *)(hi + sizeof(SceNetAdhocMatchingHelloStart) + optlen))->unk2, 0, 12);
-
-    return true;
-};
-
-bool SceNetAdhocMatchingContext::broadcastHello() {
-    sockaddr_in send_addr = {
-        .sin_family = AF_INET,
-        .sin_port = htons(this->port),
-    };
-#ifdef _WIN32
-    send_addr.sin_addr.S_un.S_addr = INADDR_BROADCAST;
-#else
-    send_addr.sin_addr.s_addr = INADDR_BROADCAST;
-#endif
-
-    auto sendResult = sendto(this->sendSocket, this->hello, this->totalHelloLength, 0, (sockaddr *)&send_addr, sizeof(send_addr));
-
-    if (sendResult == EAGAIN)
-        sendResult = 0;
-
-    if (sendResult < 0)
-        return false;
-
-    LOG_CRITICAL("sent hello to broadcast :D");
-
-    return true;
-};
 
 SceNetAdhocMatchingTarget *SceNetAdhocMatchingContext::findTargetByAddr(uint32_t addr) {
     SceNetAdhocMatchingTarget *item = this->targets;
@@ -375,8 +300,8 @@ SceNetAdhocMatchingTarget *SceNetAdhocMatchingContext::newTarget(uint32_t addr) 
     return target;
 }
 
-int SceNetAdhocMatchingContext::countTargetsWithStatusOrBetter(int status) {
-    int i = 0;
+SceSize SceNetAdhocMatchingContext::countTargetsWithStatusOrBetter(int status) {
+    SceSize i = 0;
     SceNetAdhocMatchingTarget *target;
     for (target = this->targets; target != nullptr; target = target->next) {
         if (target->status >= status)
@@ -446,7 +371,7 @@ void SceNetAdhocMatchingContext::getAddressesWithStatusOrBetter(int status, SceN
     int count = 0;
     SceNetInAddr *dst = addrs;
 
-    for (auto target = this->targets; target != nullptr; target = target->next) {
+    for (auto target = this->targetList; target != nullptr; target = target->next) {
         if (target->status >= status) {
             if (addrs) {
                 if (*pCount <= count)
@@ -460,54 +385,197 @@ void SceNetAdhocMatchingContext::getAddressesWithStatusOrBetter(int status, SceN
     *pCount = count;
 }
 
-void SceNetAdhocMatchingContext::generateAddrsMsg() {
-    auto count = this->countTargetsWithStatusOrBetter(5);
-    auto addrMsgLen = count * sizeof(uint32_t) + sizeof(SceNetAdhocMatchingAddrMsgStart);
-    SceUShort16 totalCount = count + 1;
+int SceNetAdhocMatchingContext::createMembersList() {
+    SceSize target_count = countTargetsWithStatusOrBetter(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED);
+    SceSize length = target_count * sizeof(SceNetInAddr) + sizeof(SceNetInAddr) + 4;
 
-    SceNetAdhocMatchingAddrMsgStart *msg = (SceNetAdhocMatchingAddrMsgStart *)new char[addrMsgLen];
+    SceNetAdhocMatchingMemberMessage *message = new SceNetAdhocMatchingMemberMessage();
 
-    msg->one = 1;
-    msg->type = SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ADDRS;
+    if (message == nullptr)
+        return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
 
-    auto nPacketLength = htons((totalCount & 0b0011111111111111) << 2);
-    memcpy(&msg->packetLength, &nPacketLength, sizeof(nPacketLength));
-    memcpy(&msg->ownAddress, &this->ownAddress, sizeof(this->ownAddress));
+    message->one = 1;
+    message->type = SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ADDRS;
+    message->packetLength = htons(length);
+    message->parent.s_addr = ownAddress;
+    message->members.resize(target_count);
+    getTargetAddrList(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED, message->members.data(), target_count);
 
-    getAddressesWithStatusOrBetter(5, (SceNetInAddr *)(msg + sizeof(SceNetAdhocMatchingAddrMsgStart)), &count);
-
-    if (this->addrMsg)
-        delete this->addrMsg;
-
-    this->addrMsgLen = addrMsgLen;
-    this->addrMsg = (char *)msg;
-}
-void SceNetAdhocMatchingContext::getMembers(unsigned int *membersNum, SceNetAdhocMatchingMember *members) {
-    unsigned int uVar1;
-    int currentSize;
-    unsigned int otherI;
-    SceNetAdhocMatchingMember *dst;
-    int totalSize;
-    SceSize i;
-
-    // TODO: touch this so it doesnt look like trash
-    totalSize = this->addrMsgLen;
-    uVar1 = *membersNum;
-    otherI = 0;
-    currentSize = 4;
-    dst = members;
-    i = 0;
-    if (4 < totalSize) {
-        do {
-            if ((members) && (otherI < uVar1)) {
-                memcpy(dst, this->addrMsg + currentSize, 4);
-                totalSize = this->addrMsgLen;
-            }
-            otherI++;
-            currentSize += 4;
-            dst++;
-            i = otherI;
-        } while (currentSize < totalSize);
+    if (memberMsg != nullptr) {
+        delete memberMsg;
     }
-    *membersNum = i;
+
+    memberMsgSize = length;
+    memberMsg = message;
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+void SceNetAdhocMatchingContext::getTargetAddrList(SceNetAdhocMatchingTargetStatus status, SceNetInAddr *addrList, SceSize &addrListSize) {
+    auto *target = targetList;
+    SceSize index = 0;
+
+    for (; target != nullptr; target = target->next) {
+        if (target->status < status) {
+            continue;
+        }
+        if (addrListSize <= index) {
+            break;
+        }
+        if (addrList != nullptr) {
+            memcpy(&addrList[index], &target->addr, sizeof(SceNetInAddr));
+        }
+        index++;
+    }
+
+    addrListSize = index;
+}
+
+int SceNetAdhocMatchingContext::getMembers(SceSize *membersNum, SceNetAdhocMatchingMember *members) {
+    SceSize member_count = (memberMsgSize - 8) / sizeof(SceNetInAddr);
+    SceSize count = 0;
+    
+    for (SceSize i = 0; i < member_count; i++) {
+        if (count >= *membersNum) {
+            break;
+        }
+        if (members != nullptr) {
+            memcpy(&members[count], &memberMsg->members[i], sizeof(SceNetAdhocMatchingMember));
+        }
+        count++;
+    }
+
+    *membersNum = count;
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+int SceNetAdhocMatchingContext::sendMemberListToTarget(SceNetAdhocMatchingTarget *target) {
+    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+    
+    SceNetSockaddrIn addr = {
+        .sin_len = sizeof(SceNetSockaddrIn),
+        .sin_family = AF_INET,
+        .sin_port = htons(0xe4a),
+        .sin_addr = target->addr,
+        .sin_vport = htons(port),
+    };
+
+    auto result = sendto(sendSocket, (char *)memberMsg, memberMsgSize, flags, (sockaddr *)&addr, sizeof(SceNetSockaddrIn));
+
+    if (result == EAGAIN) {
+        result = SCE_NET_ADHOC_MATCHING_OK;
+    }
+
+    return result; // convert network error to SCE_NET error ?
+}
+
+int SceNetAdhocMatchingContext::processMemberPacket(char *packet, SceSize packetLength) {
+    SceNetAdhocMatchingMemberMessage *message = new SceNetAdhocMatchingMemberMessage();
+
+    if (message == nullptr)
+        return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
+
+    if (packetLength > sizeof(SceNetAdhocMatchingMemberMessage)) {
+        return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
+    }
+
+    message->members.resize((packetLength - 8) / sizeof(SceNetInAddr));
+    memcpy(message, packet, packetLength); 
+
+    if (memberMsg != nullptr) {
+        delete memberMsg;
+    }
+
+    memberMsgSize = packetLength;
+    memberMsg = message;
+
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+
+int SceNetAdhocMatchingContext::clearMemberList() {
+    if (memberMsgSize == 0) {
+        return;
+    }
+    delete memberMsg;
+    memberMsg = nullptr;
+    memberMsgSize = 0;
+}
+
+int SceNetAdhocMatchingContext::getHelloOpt(SceSize *oOptlen, void *oOpt) {
+    int optLen = this->totalHelloLength - 0xc;
+
+    if (oOpt != nullptr && 0 < optLen) {
+        // Whichever is less to not write more than app allocated for opt data
+        if (*oOptlen < optLen)
+            optLen = *oOptlen;
+
+        memcpy(oOpt, this->helloMsg, optLen);
+    }
+
+    *oOptlen = optLen;
+    return SCE_NET_ADHOC_MATCHING_OK;
+};
+
+int SceNetAdhocMatchingContext::setHelloOpt(SceSize optlen, void *opt) {
+    auto *message = new SceNetAdhocMatchingHelloMessage();
+
+    if (message == nullptr)
+        return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
+
+    message->one = 1;
+    message->type = SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO;
+    message->packetLength = htons(optlen + 8);
+    message->helloInterval = helloInterval;
+    message->rexmtInterval = keepAliveInterval;
+    message->unk_6c = 1;
+    memcpy(message->zero, 0, sizeof(message->zero));
+
+    if (optlen > 0) {
+        message->optBuffer.resize(optlen);
+        memcpy(message->optBuffer.data(), opt, optlen);
+    }
+
+    if (helloMsg != nullptr) {
+        delete helloMsg;
+    }
+
+    totalHelloLength = optlen + 0x1c;
+    helloMsg = message;
+    return SCE_NET_ADHOC_MATCHING_OK;
+};
+
+int SceNetAdhocMatchingContext::broadcastHello() {
+    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+
+    SceNetSockaddrIn addr = {
+        .sin_len = sizeof(SceNetSockaddrIn),
+        .sin_family = AF_INET,
+        .sin_port = htons(0xe4a),
+        .sin_addr = INADDR_BROADCAST,
+        .sin_vport = htons(port),
+    };
+
+    auto result = sendto(this->sendSocket, (char *)this->helloMsg, this->totalHelloLength, flags, (sockaddr *)&addr, sizeof(SceNetSockaddrIn));
+
+    if (result == EAGAIN)
+        result = 0;
+
+    return result; // convert network error to SCE_NET error ?
+};
+
+void SceNetAdhocMatchingContext::resetHelloOpt() {
+    if (this->totalHelloLength == 0)
+        return;
+
+    delete this->helloMsg;
+    this->helloMsg = nullptr;
+    this->totalHelloLength = 0;
+}
+
+void SceNetAdhocMatchingContext::resetHelloFunction() {
+    if (!shouldHelloReqBeProcessed)
+        return;
+
+    // callout::FUN_81002f48(&ctx->callout_thread,&ctx->field_0x90,0);
+    shouldHelloReqBeProcessed = false;
 }
