@@ -28,6 +28,7 @@ TRACY_MODULE_NAME(SceNetAdhocMatching);
 #undef s_addr
 
 EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
+    TRACY_FUNC(sceNetAdhocMatchingAbortSendData, id, addr);
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -48,9 +49,10 @@ EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
 
-    // TODO
+    ctx->SendCalloutA0Two(target);
+    ctx->SetTargetSendDataStatus(target, 1);
 
-    return UNIMPLEMENTED();
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target, int optLen, void *opt) {
@@ -87,25 +89,32 @@ EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
-        if (optLen > 0) {
-            auto* _opt = new char[optLen];
-            memcpy(_opt, opt, optLen);
+        ctx->sendCallout88AndA0(foundTarget);
+        ctx->sendOptdataToTarget(foundTarget, 5, optLen, opt);
+        ctx->SetTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+        if (foundTarget->optLength > 0) {
+            delete foundTarget->opt;
+            foundTarget->optLength = 0;
+            foundTarget->opt = nullptr;
         }
-        // falltrough
-    default: {
-        // TODO
-    }
+        if (optLen > 0) {
+            foundTarget->opt = new char[optLen];
+            if (foundTarget->opt == nullptr)
+                return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE);
+            memcpy(foundTarget->opt, opt, optLen);
+            foundTarget->optLength = optLen;
+        }
     }
 
-    return UNIMPLEMENTED();
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 EXPORT(int, sceNetAdhocMatchingCancelTarget, int id, SceNetInAddr *target) {
     TRACY_FUNC(sceNetAdhocMatchingCancelTarget, id, target);
-    return CALL_EXPORT(sceNetAdhocMatchingCancelTargetWithOpt, id, target, 0, 0);
+    return CALL_EXPORT(sceNetAdhocMatchingCancelTargetWithOpt, id, target, 0, nullptr);
 }
 
-EXPORT(int, sceNetAdhocMatchingCreate, int mode, int maxnum, SceUShort16 port, int rxbuflen, unsigned int helloInterval, unsigned int keepaliveInterval, int initCount, unsigned int rexmtInterval, Ptr<void> handlerAddr) {
+EXPORT(int, sceNetAdhocMatchingCreate, SceNetAdhocMatchingMode mode, int maxnum, SceUShort16 port, int rxbuflen, unsigned int helloInterval, unsigned int keepaliveInterval, int initCount, unsigned int rexmtInterval, Ptr<void> handlerAddr) {
     TRACY_FUNC(sceNetAdhocMatchingCreate, mode, maxnum, port, rxbuflen, helloInterval, keepaliveInterval, initCount, rexmtInterval, handlerAddr)
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
@@ -150,11 +159,11 @@ EXPORT(int, sceNetAdhocMatchingCreate, int mode, int maxnum, SceUShort16 port, i
 
     ctx->helloInterval = helloInterval;
     ctx->keepAliveInterval = keepaliveInterval;
-    ctx->initCount = initCount;
+    ctx->retryCount = initCount;
     ctx->rexmtInterval = rexmtInterval;
 
     ctx->shouldHelloReqBeProcessed = false;
-    // We are missing some variables here 6c-6d
+    ctx->helloOptionFlag = 1;
     ctx->targetList = nullptr;
 
     SceNetAdhocMatchingHandler handler{
@@ -185,18 +194,19 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
 
     // These 3 may take time because they wait for both threads to end
     ctx->calloutSyncing.Finalize();
-    ctx->CloseInputThread();
-    ctx->CloseEventThread();
+    ctx->closeInputThread();
+    ctx->closeEventThread();
 
     if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_P2P) {
-        ctx->ResetHelloFunction();
-        ctx->ResetHelloOpt();
-        ctx->helloPipeMsg.flags &= 1U;
+        ctx->resetHelloFunction();
+        ctx->resetHelloOpt();
+        ctx->helloPipeMsg.flags &= 0xfffffffe;
     }
 
-    ctx->ClearPendingMessages();
-    ctx->ClearMemberList();
-    ctx->CloseSendSocket();
+    ctx->clearPendingMessages();
+    ctx->clearMemberList();
+    ctx->closeSendSocket();
+
     ctx->status = SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING;
 
     return SCE_NET_ADHOC_MATCHING_OK;
@@ -299,12 +309,53 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED:
         if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT)
             return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_TARGET_NOT_READY);
-        // TODO
-        break;
-    case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2:
         if (membersCount + 1 >= ctx->maxnum)
             return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_EXCEED_MAXNUM);
-        // TODO
+        if (foundTarget->optLength > 0) {
+            delete foundTarget->opt;
+            foundTarget->optLength = 0;
+            foundTarget->opt = nullptr;
+        }
+        if (optlen > 0) {
+            foundTarget->opt = new char[optlen];
+            if (foundTarget->opt == nullptr)
+                return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE);
+            memcpy(foundTarget->opt, opt, optlen);
+            foundTarget->optLength = optlen;
+        }
+        foundTarget->targetCount++;
+        if (foundTarget->targetCount == 0)
+            foundTarget->targetCount = 1;
+
+        ctx->sendOptDataToTarget(foundTarget, 2, foundTarget->optLength, foundTarget->opt);
+        ctx->addCallout88TimedFunct(foundTarget);
+        ctx->SetTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
+        break;
+    case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2:
+        if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT)
+            return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_TARGET_NOT_READY);
+        if (membersCount + 1 >= ctx->maxnum)
+            return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_EXCEED_MAXNUM);
+        if (foundTarget->optLength > 0) {
+            delete foundTarget->opt;
+            foundTarget->optLength = 0;
+            foundTarget->opt = nullptr;
+        }
+        if (optlen > 0) {
+            foundTarget->opt = new char[optlen];
+            if (foundTarget->opt == nullptr)
+                return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE);
+            memcpy(foundTarget->opt, opt, optlen);
+            foundTarget->optLength = optlen;
+        }
+        foundTarget->targetCount++;
+        if (foundTarget->targetCount == 0)
+            foundTarget->targetCount = 1;
+
+        ctx->sendOptDataToTarget(foundTarget, 2, foundTarget->optLength, foundTarget->opt);
+        ctx->addCallout88TimedFunct(foundTarget);
+        ctx->SetTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
+        foundTarget->retryCount = ctx->retryCount;
         break;
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
@@ -316,8 +367,8 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int length, void *data) {
-    TRACY_FUNC(sceNetAdhocMatchingSendData, id, addr, length, data);
+EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int dataLen, void *data) {
+    TRACY_FUNC(sceNetAdhocMatchingSendData, id, addr, dataLen, data);
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -335,7 +386,7 @@ EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int length,
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
 
-    if (length < 1 || length > SCE_NET_ADHOC_MATCHING_MAXDATALEN)
+    if (dataLen < 1 || dataLen > SCE_NET_ADHOC_MATCHING_MAXDATALEN)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_DATALEN);
 
     if (data == nullptr)
@@ -344,7 +395,29 @@ EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int length,
     if (target->status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_ESTABLISHED);
 
-    // TODO
+    if (target->sendDataStatus == 2) 
+        return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_DATA_BUSY);
+
+    if (target->sendDataStatus == 1) {
+        if (target->sendDataLength > 0) {
+            delete target->sendData;
+            target->sendDataLength = 0;
+            target->sendData = nullptr;
+        }
+        target->sendData = new char[dataLen];
+
+        if (target->sendData == nullptr)
+            return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE);
+
+        memcpy(target->sendData, data, dataLen);
+        target->sendDataLength = dataLen;
+        target->sendDataCount++;
+        ctx->SendDataMesage(target, 10, target->sendDataLength, target->sendData);
+        ctx->SendCalloutA0(target);
+        ctx->SetTargetSendDataStatus(target, 2);
+    } 
+    
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 EXPORT(int, sceNetAdhocMatchingSetHelloOpt, int id, int optlen, void *opt) {
@@ -393,42 +466,47 @@ EXPORT(int, sceNetAdhocMatchingStart, int id, int threadPriority, int threadStac
     if (helloOptlen > 0 && helloOpt == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_OPTLEN);
 
-    int result = ctx->InitializeSendSocket(emuenv, thread_id);
+    int result = ctx->initializeSendSocket();
     if (result != SCE_NET_ADHOC_MATCHING_OK)
         return result;
 
-    result = ctx->InitializeEventHandler(emuenv);
+    if (threadPriority == 0)
+        threadPriority = 0x10000100;
+    if (threadStackSize == 0)
+        threadPriority = 0x4000;
+
+    result = ctx->initializeEventHandler(emuenv, threadPriority, threadStackSize, threadCpuAffinityMask);
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
-        ctx->CloseSendSocket();
+        ctx->closeSendSocket();
         return result;
     }
 
-    result = ctx->InitializeInputThread(emuenv);
+    result = ctx->initializeInputThread(emuenv, threadPriority, 0x1000, threadCpuAffinityMask);
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
-        ctx->CloseEventHandler();
-        ctx->CloseSendSocket();
+        ctx->closeEventHandler();
+        ctx->closeSendSocket();
         return result;
     }
 
-    result = ctx->InitializeCalloutThread(emuenv);
+    result = ctx->initializeCalloutThread(emuenv, threadPriority, 0x1000, threadCpuAffinityMask);
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
-        ctx->CloseInputThread();
-        ctx->CloseEventHandler();
-        ctx->CloseSendSocket();
+        ctx->closeInputThread();
+        ctx->closeEventHandler();
+        ctx->closeSendSocket();
         return result;
     }
 
     if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP) {
         result = ctx->setHelloOpt(helloOptlen, helloOpt);
         if (result != SCE_NET_ADHOC_MATCHING_OK) {
-            ctx->CloseCalloutThread();
-            ctx->CloseInputThread();
-            ctx->CloseEventHandler();
-            ctx->CloseSendSocket();
+            ctx->closeCalloutThread();
+            ctx->closeInputThread();
+            ctx->closeEventHandler();
+            ctx->closeSendSocket();
             return result;
         }
-        // TODO: do a bit more here
-        ctx->addTimedFunc(sendHelloReqToPipe, ctx, ctx->helloInterval);
+
+        ctx->addHelloTimedFunct(ctx->helloInterval);
     }
 
     ctx->createMembersList();
@@ -447,8 +525,7 @@ EXPORT(int, sceNetAdhocMatchingInit, SceSize poolsize, void *poolptr) {
     if (poolptr == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    int result = SCE_NET_ADHOC_MATCHING_OK;
-    result = emuenv.adhoc.InitializeMutex();
+    int result = emuenv.adhoc.InitializeMutex();
     if (result != SCE_NET_ADHOC_MATCHING_OK)
         return result;
 
@@ -465,12 +542,13 @@ EXPORT(int, sceNetAdhocMatchingInit, SceSize poolsize, void *poolptr) {
     result = emuenv.adhoc.InitializeMatchingContextList();
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
         emuenv.adhoc.DeleteMSpace();
+        emuenv.adhoc.DeleteMutex();
         return result;
     }
 
     emuenv.adhoc.is_initialized = true;
 
-    return result;
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 EXPORT(int, sceNetAdhocMatchingTerm) {
@@ -479,7 +557,10 @@ EXPORT(int, sceNetAdhocMatchingTerm) {
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
     for (int i = 0; i < SCE_NET_ADHOC_MATCHING_MAXNUM; i++) {
+        // This call will use the mutex
         CALL_EXPORT(sceNetAdhocMatchingStop, i);
+
+        // We aren't guarded by a mutex. We need to check every iteration
         if (!emuenv.adhoc.is_initialized)
             continue;
 
@@ -496,13 +577,15 @@ EXPORT(int, sceNetAdhocMatchingTerm) {
     }
 
     int result = emuenv.adhoc.IsAnyMatchingContextRunning();
-    if (result == SCE_NET_ADHOC_MATCHING_OK) {
-        emuenv.adhoc.DestroyAllMatchingContext();
-        emuenv.adhoc.DeleteMutex();
-        emuenv.adhoc.is_initialized = false;
+    if (result != SCE_NET_ADHOC_MATCHING_OK) {
+        return result;
     }
 
-    return UNIMPLEMENTED();
+    emuenv.adhoc.DestroyAllMatchingContext();
+    emuenv.adhoc.DeleteMSpace();
+    emuenv.adhoc.DeleteMutex();
+    emuenv.adhoc.is_initialized = false;
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 #pragma pop_macro("s_addr")

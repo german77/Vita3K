@@ -178,16 +178,41 @@ struct SceNetAdhocMatchingTarget {
     SceNetAdhocMatchingTarget *next;
     SceNetAdhocMatchingTargetStatus status;
     SceNetInAddr addr;
-    int rawPacketLength;
+
+    SceSize keepAliveInterval;
+
+    SceSize rawPacketLength;
     char *rawPacket;
-    unsigned int packetLength;
-    unsigned int keepAliveInterval;
-    SceNetAdhocMatchingPipeMessage msg;
-    bool unk_54;
-    bool unk_58;
-    int type_68;
+    SceSize packetLength;
+
+    SceSize optLength;
+    char *opt;
+
+    SceNetAdhocMatchingPipeMessage msg28;
+    SceNetAdhocMatchingPipeMessage msg88;
+
     bool is_88_pending;
+    int uuid2;
+
+    int retryCount;
+    int msgPipeUid;
+
+    bool unk_54;
+    int targetCount;
+
+    SceSize sendDataCount;
+    int unk_64;
+    int sendDataStatus;
+    SceSize sendDataLength;
+    char *sendData;
+
+    SceNetAdhocMatchingPipeMessage msgA0;
     bool is_a0_pending;
+    int context_uuid;
+
+    char* fun_unk_88;
+    char *fun_unk_a0;
+
 };
 
 struct SceNetAdhocMatchingCalloutFunction {
@@ -205,7 +230,7 @@ struct SceNetAdhocMatchingCalloutSyncing {
 };
 
 struct SceNetAdhocMatchingContext {
-    int addTimedFunc(int (*entry)(void *), void *arg, uint64_t timeFromNow);
+    int addHelloTimedFunct(int (*entry)(void *), void *arg, uint64_t timeFromNow);
     bool searchTimedFunc(int (*entry)(void *));
     int delTimedFunc(int (*entry)(void *));
 
@@ -214,21 +239,22 @@ struct SceNetAdhocMatchingContext {
     void notifyHandler(EmuEnvState *emuenv, int event, SceNetInAddr *peer, int optLen, void *opt);
 
     
-    bool initializeInputThread(EmuEnvState &emuenv);
+    int initializeInputThread(EmuEnvState &emuenv, , int threadPriority, int threadStackSize, int threadCpuAffinityMask);
     void closeInputThread();
 
-    bool initializeEventHandler(EmuEnvState &emuenv);
+    int initializeEventHandler(EmuEnvState &emuenv, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
     void closeEventHandler();
 
-    bool InitializeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
+    int initializeSendSocket();
     void closeSendSocket();
 
-    bool InitializeCalloutThread(EmuEnvState &emuenv);
+    bool initializeCalloutThread(EmuEnvState &emuenv, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
+    void closeCalloutThread();
 
     void processPacketFromTarget(EmuEnvState *emuenv, SceNetAdhocMatchingTarget *peer);
 
     // Target
-    void SetTarget68Type(SceNetAdhocMatchingTarget *target, int type);
+    void SetTargetSendDataStatus(SceNetAdhocMatchingTarget *target, int status);
     void SetTargetStatus(SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingTargetStatus status);
     SceNetAdhocMatchingTarget *newTarget(uint32_t addr);
     SceNetAdhocMatchingTarget *findTargetByAddr(uint32_t addr);
@@ -250,43 +276,46 @@ struct SceNetAdhocMatchingContext {
     void resetHelloOpt();
     void resetHelloFunction();
 
-    SceNetAdhocMatchingContext *next;
+    SceNetAdhocMatchingContext *next = nullptr;
     int id;
     SceNetAdhocMatchingContextStatus status = SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING;
-    int mode;
+    SceNetAdhocMatchingMode mode;
     int maxnum;
     SceUShort16 port;
+
     int rxbuflen;
     char *rxbuf;
+
     unsigned int helloInterval;
     unsigned int keepAliveInterval;
-    int initCount;
+    unsigned int retryCount;
     unsigned int rexmtInterval;
 
     SceNetAdhocMatchingHandler handler;
 
-    std::thread inputThread;
-    std::thread eventThread;
-
     int sendSocket;
     int recvSocket; // Socket used by parent to broadcast
 
-    int pipesFd[2]; // 0 = read, 1 = write
+    std::thread eventThread;
+    int msgPipeUid;
+    std::thread inputThread;
 
     unsigned int totalHelloLength;
     SceNetAdhocMatchingHelloMessage *helloMsg;
-    bool shouldHelloReqBeProcessed;
-
-    uint32_t ownAddress;
-
-    SceSize memberMsgSize;
-    SceNetAdhocMatchingMemberMessage* memberMsg;
-
     SceNetAdhocMatchingPipeMessage helloPipeMsg;
 
-    SceNetAdhocMatchingCalloutSyncing calloutSyncing;
+    SceSize memberMsgSize;
+    SceNetAdhocMatchingMemberMessage *memberMsg;
+
+    bool shouldHelloReqBeProcessed;
+    int helloOptionFlag;
 
     SceNetAdhocMatchingTarget *targetList;
+
+    std::thread calloutThread;
+    SceNetAdhocMatchingCalloutSyncing calloutSyncing;
+
+    uint32_t ownAddress;
 };
 
 class AdhocState {

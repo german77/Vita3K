@@ -335,11 +335,50 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState *emuenv, Sc
 }
 
 void SceNetAdhocMatchingContext::SetTarget68Type(SceNetAdhocMatchingTarget* target, int type) {
-
+    if (target->type_68 == type) {
+        return;
+    }
+    if (target->type_68 == 2 && type == 1 && target->sendDataLength > 0) {
+        delete target->sendData;
+        target->sendDataLength = 0;
+        target->sendData = nullptr;
+    }
+    target->type_68 = type;
 }
 
 void SceNetAdhocMatchingContext::SetTargetStatus(SceNetAdhocMatchingTarget* target, SceNetAdhocMatchingTargetStatus status) {
+    if (target->status == status) {
+        return;
+    }
 
+    bool is_target_in_progress = target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES || target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2;
+    bool is_status_not_in_progress = status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2 && status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2;  
+    
+    if (is_target_in_progress && is_status_not_in_progress && target->packetLength > 0) {
+        delete target->opt;
+        target->packetLength = 0;
+        target->opt = nullptr;
+    }
+
+    if (target->status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED) {
+        target->sendDataCount = 0;
+        target->unk_64 = 0;
+    }
+
+    if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && target->type_68 != 1){
+        if (target->type_68 == 2 && target->sendDataLength > 0) {
+            delete target->sendData;
+            target->sendDataLength = 0;
+            target->sendData = nullptr;
+        }
+        target->type_68 = 1;
+    }
+
+    if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED || status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED) {
+        createMembersList();
+    }
+
+    target->status = status;
 }
 
 SceNetAdhocMatchingTarget *SceNetAdhocMatchingContext::newTarget(uint32_t addr) {
