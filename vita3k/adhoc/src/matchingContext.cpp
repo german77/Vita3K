@@ -325,7 +325,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState *emuenv, Sc
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ADDRS:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK7:
-    case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK8:
+    case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_BYE:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK10:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK11: break;
@@ -334,19 +334,19 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState *emuenv, Sc
     // TODO
 }
 
-void SceNetAdhocMatchingContext::SetTarget68Type(SceNetAdhocMatchingTarget* target, int type) {
-    if (target->type_68 == type) {
+void SceNetAdhocMatchingContext::setTargetSendDataStatus(SceNetAdhocMatchingTarget *target, int status) {
+    if (target->sendDataStatus == status) {
         return;
     }
-    if (target->type_68 == 2 && type == 1 && target->sendDataLength > 0) {
+    if (target->sendDataStatus == 2 && status == 1 && target->sendDataLength > 0) {
         delete target->sendData;
         target->sendDataLength = 0;
         target->sendData = nullptr;
     }
-    target->type_68 = type;
+    target->sendDataStatus = status;
 }
 
-void SceNetAdhocMatchingContext::SetTargetStatus(SceNetAdhocMatchingTarget* target, SceNetAdhocMatchingTargetStatus status) {
+void SceNetAdhocMatchingContext::setTargetStatus(SceNetAdhocMatchingTarget* target, SceNetAdhocMatchingTargetStatus status) {
     if (target->status == status) {
         return;
     }
@@ -365,13 +365,13 @@ void SceNetAdhocMatchingContext::SetTargetStatus(SceNetAdhocMatchingTarget* targ
         target->unk_64 = 0;
     }
 
-    if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && target->type_68 != 1){
-        if (target->type_68 == 2 && target->sendDataLength > 0) {
+    if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && target->sendDataStatus != 1) {
+        if (target->sendDataStatus == 2 && target->sendDataLength > 0) {
             delete target->sendData;
             target->sendDataLength = 0;
             target->sendData = nullptr;
         }
-        target->type_68 = 1;
+        target->sendDataStatus = 1;
     }
 
     if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED || status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED) {
@@ -388,22 +388,23 @@ SceNetAdhocMatchingTarget *SceNetAdhocMatchingContext::newTarget(uint32_t addr) 
         return nullptr;
     }
 
-    SetTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+    setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
     target->addr.s_addr = addr;
-    target->msg = this->msgPipe;
-    //SceNetInternal_689B9D7D(&target->unk_58);
-    if (target->unk_58 == 0) {
-        target->unk_58 = 1;
+    target->msgPipeUid = this->msgPipeUid;
+
+    //SceNetInternal_689B9D7D(&target->targetCount); <-- GetCurrentTargetCount
+    if (target->targetCount == 0) {
+        target->targetCount = 1;
     }
 
     target->is_88_pending = false;
-    if (target->type_68 != -1) {
-        if (target->type_68 == 2 && target->packetLength > 0) {
+    if (target->sendDataStatus != 1) {
+        if (target->sendDataStatus == 2 && target->packetLength > 0) {
             delete target->rawPacket;
             target->packetLength = 0;
             target->rawPacket = nullptr;
         }
-        target->type_68 = 1;
+        target->sendDataStatus = 1;
     }
 
     target->is_a0_pending = false;
@@ -456,6 +457,57 @@ SceSize SceNetAdhocMatchingContext::countTargetsWithStatusOrBetter(SceNetAdhocMa
 
 bool SceNetAdhocMatchingContext::isTargetAddressHigher(SceNetAdhocMatchingTarget* target) {
     return ownAddress < target->addr.s_addr;
+}
+
+void SceNetAdhocMatchingContext::deleteTarget(SceNetAdhocMatchingTarget *target) {
+    SceNetAdhocMatchingTarget *previous = nullptr;
+    auto *current = this->targetList;
+
+    // Find and remove target from list
+    while (true) {
+        if (current == nullptr) {
+            return;
+        }
+
+        if (current == target) {
+            if (previous == nullptr) {
+                this->targetList = current->next;
+                break;
+            }
+            previous->next = current->next;
+            break;
+        }
+
+        previous = current;
+        current = current->next;
+    }
+
+    if (target->optLength > 0)
+        delete target->opt;
+    if (target->sendDataLength > 0)
+        delete target->sendData;
+    if (target->rawPacket != nullptr)
+        delete target->rawPacket;
+
+    delete target;
+}
+
+void SceNetAdhocMatchingContext::deleteAllTargets() {
+    auto *target = this->targetList;
+    while (target != nullptr) {
+        sendCallout88AndA0(target);
+        if (target->optLength > 0)
+            delete target->opt;
+        if (target->sendDataLength > 0)
+            delete target->sendData;
+        if (target->rawPacket != nullptr)
+            delete target->rawPacket;
+        auto *nextTarget = target->next;
+        delete target;
+        target = nextTarget;
+    }
+    this->targetList = nullptr;
+    BroadcastBye();
 }
 
 int SceNetAdhocMatchingContext::createMembersList() {
@@ -521,7 +573,7 @@ int SceNetAdhocMatchingContext::sendMemberListToTarget(SceNetAdhocMatchingTarget
     return result; // convert network error to SCE_NET error ?
 }
 
-int SceNetAdhocMatchingContext::processMemberPacket(char *packet, SceSize packetLength) {
+int SceNetAdhocMatchingContext::processMemberListPacket(char *packet, SceSize packetLength) {
     SceNetAdhocMatchingMemberMessage *message = new SceNetAdhocMatchingMemberMessage();
 
     if (message == nullptr)
@@ -632,3 +684,53 @@ void SceNetAdhocMatchingContext::resetHelloFunction() {
     // callout::FUN_81002f48(&ctx->callout_thread,&ctx->field_0x90,0);
     shouldHelloReqBeProcessed = false;
 }
+
+int SceNetAdhocMatchingContext::sendDataMessageToTarget(SceNetAdhocMatchingTarget *target, int type, int datalen, char *data) {
+    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+
+    SceNetSockaddrIn addr = {
+        .sin_len = sizeof(SceNetSockaddrIn),
+        .sin_family = AF_INET,
+        .sin_port = htons(0xe4a),
+        .sin_addr = target->addr,
+        .sin_vport = htons(port),
+    };
+
+    auto result = sendto(sendSocket, (char *)memberMsg, memberMsgSize, flags, (sockaddr *)&addr, sizeof(SceNetSockaddrIn));
+
+    if (result == EAGAIN) {
+        result = SCE_NET_ADHOC_MATCHING_OK;
+    }
+
+    return result; // convert network error to SCE_NET error ?
+}
+
+
+int SceNetAdhocMatchingContext::sendOptDataToTarget(SceNetAdhocMatchingTarget *target, int type, int optlen, char *opt) {
+
+}
+   
+int SceNetAdhocMatchingContext::broadcastBye() {
+    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+
+    SceNetAdhocMatchingByeMessage byeMsg = {
+        .one = 1,
+        .type = SCE_NET_ADHOC_MATCHING_PACKET_TYPE_BYE,
+        .packetLength = 0,
+    };
+
+    SceNetSockaddrIn addr = {
+        .sin_len = sizeof(SceNetSockaddrIn),
+        .sin_family = AF_INET,
+        .sin_port = htons(0xe4a),
+        .sin_addr = INADDR_BROADCAST,
+        .sin_vport = htons(port),
+    };
+
+    auto result = sendto(this->sendSocket, (char *)&byeMsg, sizeof(SceNetAdhocMatchingByeMessage), flags, (sockaddr *)&addr, sizeof(SceNetSockaddrIn));
+
+    if (result == EAGAIN)
+        result = 0;
+
+    return result; // convert network error to SCE_NET error ?
+    }
