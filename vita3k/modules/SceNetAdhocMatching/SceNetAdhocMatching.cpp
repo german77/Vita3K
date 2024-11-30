@@ -35,7 +35,7 @@ EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
     if (addr == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -50,12 +50,12 @@ EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
 
     ctx->SendCalloutA0Two(target);
-    ctx->SetTargetSendDataStatus(target, 1);
+    ctx->setTargetSendDataStatus(target, 1);
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target, int optLen, void *opt) {
+EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target, int optLen, char *opt) {
     TRACY_FUNC(sceNetAdhocMatchingCancelTargetWithOpt, id, target, optLen, opt);
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
@@ -63,7 +63,7 @@ EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -90,8 +90,8 @@ EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
         ctx->sendCallout88AndA0(foundTarget);
-        ctx->sendOptdataToTarget(foundTarget, 5, optLen, opt);
-        ctx->SetTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+        ctx->sendOptDataToTarget(foundTarget, 5, optLen, opt);
+        ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         if (foundTarget->optLength > 0) {
             delete foundTarget->opt;
             foundTarget->optLength = 0;
@@ -119,7 +119,7 @@ EXPORT(int, sceNetAdhocMatchingCreate, SceNetAdhocMatchingMode mode, int maxnum,
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
 
     if (mode < SCE_NET_ADHOC_MATCHING_MODE_PARENT || mode >= SCE_NET_ADHOC_MATCHING_MODE_MAX )
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_MODE);
@@ -180,7 +180,7 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -195,7 +195,7 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
     // These 3 may take time because they wait for both threads to end
     ctx->calloutSyncing.Finalize();
     ctx->closeInputThread();
-    ctx->closeEventThread();
+    ctx->closeEventHandler();
 
     if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_P2P) {
         ctx->resetHelloFunction();
@@ -203,7 +203,7 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
         ctx->helloPipeMsg.flags &= 0xfffffffe;
     }
 
-    ctx->clearPendingMessages();
+    ctx->deleteAllTargets();
     ctx->clearMemberList();
     ctx->closeSendSocket();
 
@@ -217,7 +217,7 @@ EXPORT(int, sceNetAdhocMatchingDelete, int id) {
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -228,7 +228,7 @@ EXPORT(int, sceNetAdhocMatchingDelete, int id) {
 
     delete ctx->rxbuf;
     ctx->rxbuf = nullptr;
-    emuenv.adhoc.DestroyMatchingContext(ctx);
+    emuenv.adhoc.deleteMatchingContext(ctx);
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }
@@ -242,7 +242,7 @@ EXPORT(int, sceNetAdhocMatchingGetHelloOpt, int id, SceSize *optlen, void *opt) 
     if (optlen == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -265,7 +265,7 @@ EXPORT(int, sceNetAdhocMatchingGetMembers, int id, unsigned int *membersCount, S
     if (membersCount == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -285,7 +285,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -328,8 +328,8 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
             foundTarget->targetCount = 1;
 
         ctx->sendOptDataToTarget(foundTarget, 2, foundTarget->optLength, foundTarget->opt);
-        ctx->addCallout88TimedFunct(foundTarget);
-        ctx->SetTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
+        ctx->add88TimedFunct(foundTarget);
+        ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
         break;
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2:
         if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT)
@@ -353,8 +353,8 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
             foundTarget->targetCount = 1;
 
         ctx->sendOptDataToTarget(foundTarget, 2, foundTarget->optLength, foundTarget->opt);
-        ctx->addCallout88TimedFunct(foundTarget);
-        ctx->SetTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
+        ctx->add88TimedFunct(foundTarget);
+        ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
         foundTarget->retryCount = ctx->retryCount;
         break;
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
@@ -375,7 +375,7 @@ EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int dataLen
     if (addr == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -412,9 +412,9 @@ EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int dataLen
         memcpy(target->sendData, data, dataLen);
         target->sendDataLength = dataLen;
         target->sendDataCount++;
-        ctx->SendDataMesage(target, 10, target->sendDataLength, target->sendData);
-        ctx->SendCalloutA0(target);
-        ctx->SetTargetSendDataStatus(target, 2);
+        ctx->SendDataMessageToTarget(target, 10, target->sendDataLength, target->sendData);
+        ctx->sendCalloutA0(target);
+        ctx->setTargetSendDataStatus(target, 2);
     } 
     
     return SCE_NET_ADHOC_MATCHING_OK;
@@ -425,7 +425,7 @@ EXPORT(int, sceNetAdhocMatchingSetHelloOpt, int id, int optlen, void *opt) {
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -451,7 +451,7 @@ EXPORT(int, sceNetAdhocMatchingStart, int id, int threadPriority, int threadStac
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     SceNetAdhocMatchingContext *ctx = emuenv.adhoc.findMatchingContextById(id);
 
     if (ctx == nullptr)
@@ -525,7 +525,7 @@ EXPORT(int, sceNetAdhocMatchingInit, SceSize poolsize, void *poolptr) {
     if (poolptr == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG);
 
-    int result = emuenv.adhoc.InitializeMutex();
+    int result = emuenv.adhoc.initializeMutex();
     if (result != SCE_NET_ADHOC_MATCHING_OK)
         return result;
 
@@ -533,16 +533,16 @@ EXPORT(int, sceNetAdhocMatchingInit, SceSize poolsize, void *poolptr) {
         poolsize = 0x20000;
     }
 
-    result = emuenv.adhoc.CreateMSpace(poolsize, poolptr);
+    result = emuenv.adhoc.createMSpace(poolsize, poolptr);
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
-        emuenv.adhoc.DeleteMutex();
+        emuenv.adhoc.deleteMutex();
         return result;
     }
 
-    result = emuenv.adhoc.InitializeMatchingContextList();
+    result = emuenv.adhoc.initializeMatchingContextList();
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
-        emuenv.adhoc.DeleteMSpace();
-        emuenv.adhoc.DeleteMutex();
+        emuenv.adhoc.deleteMSpace();
+        emuenv.adhoc.deleteMutex();
         return result;
     }
 
@@ -564,7 +564,7 @@ EXPORT(int, sceNetAdhocMatchingTerm) {
         if (!emuenv.adhoc.is_initialized)
             continue;
 
-        std::lock_guard<std::mutex> guard(emuenv.adhoc.GetMutex());
+        std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
         auto ctx = emuenv.adhoc.findMatchingContextById(i);
         if (ctx == nullptr)
             continue;
@@ -573,17 +573,17 @@ EXPORT(int, sceNetAdhocMatchingTerm) {
 
         delete ctx->rxbuf;
         ctx->rxbuf = nullptr;
-        emuenv.adhoc.DestroyMatchingContext(ctx);
+        emuenv.adhoc.deleteMatchingContext(ctx);
     }
 
-    int result = emuenv.adhoc.IsAnyMatchingContextRunning();
+    int result = emuenv.adhoc.isAnyMatchingContextRunning();
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
         return result;
     }
 
-    emuenv.adhoc.DestroyAllMatchingContext();
-    emuenv.adhoc.DeleteMSpace();
-    emuenv.adhoc.DeleteMutex();
+    emuenv.adhoc.deleteAllMatchingContext();
+    emuenv.adhoc.deleteMSpace();
+    emuenv.adhoc.deleteMutex();
     emuenv.adhoc.is_initialized = false;
     return SCE_NET_ADHOC_MATCHING_OK;
 }

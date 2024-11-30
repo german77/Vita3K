@@ -17,13 +17,13 @@
 
 #include <adhoc/state.h>
 
-int AdhocState::InitializeMutex() {
+int AdhocState::initializeMutex() {
     // Initialize mutex
     is_mutex_initialized = true;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::DeleteMutex() {
+int AdhocState::deleteMutex() {
     if (is_mutex_initialized) {
         // Delete mutex
     }
@@ -31,26 +31,26 @@ int AdhocState::DeleteMutex() {
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-std::mutex &AdhocState::GetMutex() {
+std::mutex &AdhocState::getMutex() {
     return mutex;
 }
 
-int AdhocState::CreateMSpace(SceSize poolsize, void *poolptr) {
+int AdhocState::createMSpace(SceSize poolsize, void *poolptr) {
     // Just a placeholder. We don't really need this kind of allocation
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::DeleteMSpace() {
+int AdhocState::deleteMSpace() {
     // Just a placeholder. We don't really need this kind of allocation
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::InitializeMatchingContextList() {
+int AdhocState::initializeMatchingContextList() {
     contextList = nullptr;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::IsAnyMatchingContextRunning() {
+int AdhocState::isAnyMatchingContextRunning() {
     SceNetAdhocMatchingContext *context = contextList;
     for (; context != nullptr; context = context->next) {
         if (context->status != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING)
@@ -65,7 +65,6 @@ SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(int id) {
     for (; context != nullptr; context = context->next) {
         if (context->id != id)
             continue;
-        // Found Matching ID
         return context;
     }
 
@@ -125,7 +124,7 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
     } while (true);
 }
 
-void AdhocState::DestroyMatchingContext(SceNetAdhocMatchingContext *ctx) {
+void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
     SceNetAdhocMatchingContext *context = contextList;
     SceNetAdhocMatchingContext *previous_ctx = nullptr;
     for (; context != nullptr; context = context->next) {
@@ -146,7 +145,7 @@ void AdhocState::DestroyMatchingContext(SceNetAdhocMatchingContext *ctx) {
     delete ctx;
 };
 
-void AdhocState::DestroyAllMatchingContext() {
+void AdhocState::deleteAllMatchingContext() {
     SceNetAdhocMatchingContext *context = contextList;
     while (context != nullptr) {
         auto *next_ctx = context->next;
