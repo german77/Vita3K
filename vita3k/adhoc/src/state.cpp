@@ -16,41 +16,53 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <adhoc/state.h>
+#include <util/tracy.h>
+TRACY_MODULE_NAME(SceNetAdhocMatching);
 
-int AdhocState::initializeMutex() {
+int AdhocState::initializeMutex(EmuEnvState &emuenv) {
+    ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     // Initialize mutex
     is_mutex_initialized = true;
+    FrameMarkNamed("Adhoc");
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::deleteMutex() {
+int AdhocState::deleteMutex(EmuEnvState &emuenv) {
+    ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     if (is_mutex_initialized) {
         // Delete mutex
     }
     is_mutex_initialized = false;
+    FrameMarkNamed("Adhoc");
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-std::mutex &AdhocState::getMutex() {
+std::mutex &AdhocState::getMutex(EmuEnvState &emuenv) {
+    ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     return mutex;
 }
 
-int AdhocState::createMSpace(SceSize poolsize, void *poolptr) {
+int AdhocState::createMSpace(EmuEnvState &emuenv,SceSize poolsize, void *poolptr) {
+    ZoneScopedC(0xF6C2FF);
     // Just a placeholder. We don't really need this kind of allocation
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::deleteMSpace() {
+int AdhocState::deleteMSpace(EmuEnvState &emuenv) {
+    tracy::SetThreadName("deleteMSpace");
+    ZoneScopedC(0xF6C2FF);
     // Just a placeholder. We don't really need this kind of allocation
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::initializeMatchingContextList() {
+int AdhocState::initializeMatchingContextList(EmuEnvState &emuenv) {
+    ZoneScopedC(0xF6C2FF);
     contextList = nullptr;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int AdhocState::isAnyMatchingContextRunning() {
+int AdhocState::isAnyMatchingContextRunning(EmuEnvState &emuenv) {
+    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     for (; context != nullptr; context = context->next) {
         if (context->status != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING)
@@ -59,10 +71,12 @@ int AdhocState::isAnyMatchingContextRunning() {
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(int id) {
+SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(EmuEnvState &emuenv,int id) {
+    ZoneScopedC(0xF6C2FF);
     // Iterate Matching Context List
     SceNetAdhocMatchingContext *context = contextList;
     for (; context != nullptr; context = context->next) {
+        return context;
         if (context->id != id)
             continue;
         return context;
@@ -72,7 +86,8 @@ SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(int id) {
     return nullptr;
 };
 
-int AdhocState::createMatchingContext(SceUShort16 port) {
+int AdhocState::createMatchingContext(EmuEnvState &emuenv,SceUShort16 port) {
+    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
 
     // Check for port conflicts
@@ -92,7 +107,7 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
             return SCE_NET_ADHOC_MATCHING_ERROR_ID_NOT_AVAIL;
         }
 
-        context = findMatchingContextById(next_id);
+        context = findMatchingContextById(emuenv, next_id);
 
         // This id is already in use. Find next id.
         if (context != nullptr) {
@@ -124,7 +139,8 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
     } while (true);
 }
 
-void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
+void AdhocState::deleteMatchingContext(EmuEnvState &emuenv,SceNetAdhocMatchingContext *ctx) {
+    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     SceNetAdhocMatchingContext *previous_ctx = nullptr;
     for (; context != nullptr; context = context->next) {
@@ -145,7 +161,8 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
     delete ctx;
 };
 
-void AdhocState::deleteAllMatchingContext() {
+void AdhocState::deleteAllMatchingContext(EmuEnvState &emuenv) {
+    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     while (context != nullptr) {
         auto *next_ctx = context->next;

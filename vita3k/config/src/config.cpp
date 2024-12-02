@@ -258,7 +258,7 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
     if (!cfg.console) {
         LOG_INFO_IF(cfg.load_config, "Custom configuration file loaded successfully.");
 
-        logging::set_level(static_cast<spdlog::level::level_enum>(cfg.log_level));
+        logging::set_level(static_cast<spdlog::level::level_enum>(SPDLOG_LEVEL_TRACE));
         static constexpr std::array<const char *, 7> LIST_LOG_LEVEL = { "Trace", "Debug", "Info", "Warning", "Error", "Critical", "Off" };
 
         LOG_INFO_IF(cfg.content_path, "input-content-path: {}", cfg.content_path->string());
