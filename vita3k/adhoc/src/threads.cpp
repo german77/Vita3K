@@ -32,61 +32,62 @@ int sendHelloReqToPipe(void *arg) {
     return 0;
 }
 
-int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
-    auto ctx = emuenv->adhoc.findMatchingContextById(*emuenv, id);
+int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
+    tracy::SetThreadName("adhocMatchingEventThread");
+    auto ctx = emuenv->adhoc.findMatchingContextById(id);
 
-    //SceNetAdhocMatchingPipeMessage pipeMessage;
-    //while (read(ctx->pipesFd[0], &pipeMessage, sizeof(pipeMessage)) >= 0) {
-    //    std::lock_guard<std::mutex> guard(emuenv->adhoc.getMutex());
-    //    
-    //    int type = pipeMessage.type;
-    //    auto peer = pipeMessage.peer;
-    //    pipeMessage.flags &= ~1U; // get rid of last bit
+    SceNetAdhocMatchingPipeMessage pipeMessage;
+    while (read(ctx->msgPipeUid[0], &pipeMessage, sizeof(pipeMessage)) >= 0) {
+        ZoneScopedC(0xFFC2C6);
+        std::lock_guard<std::mutex> guard(emuenv->adhoc.getMutex());
+        
+        int type = pipeMessage.type;
+        auto target = pipeMessage.peer;
+        pipeMessage.flags &= ~1U; // get rid of last bit
 
-    //    switch (type) {
-    //    case SCE_NET_ADHOC_MATCHING_EVENT_PACKET: { // Packet received
-    //        peer->msg.flags &= ~1U;
-    //        ctx->processPacketFromTarget(emuenv,peer);
-    //        if (peer->rawPacket)
-    //            delete peer->rawPacket;
-    //        peer->rawPacket = 0;
-    //        peer->rawPacketLength = 0;
-    //        break;
-    //    }
-    //    case SCE_NET_ADHOC_MATCHING_EVENT_UNK2: { // idk
-    //        // TODO
-    //        break;
-    //    }
-    //    case SCE_NET_ADHOC_MATCHING_EVENT_UNK3: { // idk
-    //        // TODO
-    //        break;
-    //    }
-    //    case SCE_NET_ADHOC_MATCHING_EVENT_HELLO_SEND: { // broadcast hello message to network
-    //        int num = ctx->countTargetsWithStatusOrBetter(3);
-    //        // also count ourselves
-    //        if (num + 1 < ctx->maxnum)
-    //            ctx->broadcastHello();
+        switch (type) {
+        case SCE_NET_ADHOC_MATCHING_EVENT_PACKET: { // Packet received
+            target->pipeMsg28.flags &= ~1U;
+            ctx->processPacketFromTarget(emuenv, target);
+            if (target->rawPacket)
+                delete target->rawPacket;
+            target->rawPacket = 0;
+            target->rawPacketLength = 0;
+            break;
+        }
+        case SCE_NET_ADHOC_MATCHING_EVENT_UNK2: { // idk
+            // TODO
+            break;
+        }
+        case SCE_NET_ADHOC_MATCHING_EVENT_UNK3: { // idk
+            // TODO
+            break;
+        }
+        case SCE_NET_ADHOC_MATCHING_EVENT_HELLO_SEND: { // broadcast hello message to network
+            int num = ctx->countTargetsWithStatusOrBetter(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES);
+            // also count ourselves
+            if (num + 1 < ctx->maxnum)
+                ctx->broadcastHello(*emuenv, thread_id);
 
-    //        if (ctx->searchTimedFunc(sendHelloReqToPipe)) {
-    //            ctx->delTimedFunc(sendHelloReqToPipe); // not run it, we are gonna reschedule it
-    //        };
-    //        ctx->addTimedFunc(sendHelloReqToPipe, ctx, ctx->helloInterval);
-    //        ctx->helloPipeMsg.flags &= ~1U;
-    //        break;
-    //    }
-    //    case SCE_NET_ADHOC_MATCHING_EVENT_UNK5: {
-    //        // TODO
-    //        break;
-    //    }
-    //    }
-    //    emuenv->adhoc.mutex.unlock();
-    //}
+            //if (ctx->searchTimedFunc(sendHelloReqToPipe)) {
+            //    ctx->delTimedFunc(sendHelloReqToPipe); // not run it, we are gonna reschedule it
+            //};
+            //ctx->addTimedFunc(sendHelloReqToPipe, ctx, ctx->helloInterval);
+            ctx->helloPipeMsg.flags &= ~1U;
+            break;
+        }
+        case SCE_NET_ADHOC_MATCHING_EVENT_UNK5: {
+            // TODO
+            break;
+        }
+        }
+    }
 
     return 0;
 };
 
 int adhocMatchingInputThread(EmuEnvState *emuenv, int id) {
-    auto ctx = emuenv->adhoc.findMatchingContextById(*emuenv, id);
+    auto ctx = emuenv->adhoc.findMatchingContextById(id);
 
     sockaddr_in *fromAddr;
     socklen_t fromAddrLen = sizeof(*fromAddr);
@@ -144,7 +145,7 @@ int adhocMatchingInputThread(EmuEnvState *emuenv, int id) {
 };
 
 int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id) {
-    auto ctx = emuenv->adhoc.findMatchingContextById(*emuenv, id);
+    auto ctx = emuenv->adhoc.findMatchingContextById(id);
 
     do {
         ctx->calloutSyncing.calloutMutex.lock();
