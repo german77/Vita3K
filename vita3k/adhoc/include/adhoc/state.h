@@ -255,14 +255,14 @@ struct SceNetAdhocMatchingCalloutSyncing {
 };
 
 struct SceNetAdhocMatchingContext {    
-    int initializeInputThread(EmuEnvState &emuenv, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
-    void closeInputThread();
+    int initializeInputThread(EmuEnvState &emuenv, SceUID thread_id, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
+    void closeInputThread(EmuEnvState &emuenv, SceUID thread_id);
 
-    int initializeEventHandler(EmuEnvState &emuenv, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
+    int initializeEventHandler(EmuEnvState &emuenv, SceUID thread_id, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
     void closeEventHandler();
 
     int initializeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
-    void closeSendSocket();
+    void closeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
 
     void processPacketFromTarget(EmuEnvState *emuenv, SceNetAdhocMatchingTarget *peer);
 
@@ -275,7 +275,7 @@ struct SceNetAdhocMatchingContext {
     SceSize countTargetsWithStatusOrBetter(SceNetAdhocMatchingTargetStatus status);
     bool isTargetAddressHigher(SceNetAdhocMatchingTarget *target);
     void deleteTarget(SceNetAdhocMatchingTarget *target);
-    void deleteAllTargets();
+    void deleteAllTargets(EmuEnvState &emuenv, SceUID thread_id);
 
     // Member list message
     int createMembersList();
@@ -287,7 +287,7 @@ struct SceNetAdhocMatchingContext {
     // Hello optional data
     int getHelloOpt(SceSize *oOptlen, void *oOpt);
     int setHelloOpt(SceSize optlen, void *opt);
-    int broadcastHello();
+    int broadcastHello(EmuEnvState &emuenv, SceUID thread_id);
     void resetHelloOpt();
     void resetHelloFunction();
 
@@ -295,15 +295,15 @@ struct SceNetAdhocMatchingContext {
     void sendCalloutA0Two(SceNetAdhocMatchingTarget *target);
     void SendCallout88(SceNetAdhocMatchingTarget *target);
     void sendCallout88AndA0(SceNetAdhocMatchingTarget *target);
-    int sendDataMessageToTarget(SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data);
-    int sendOptDataToTarget(SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt);
+    int sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data);
+    int sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt);
     
-    void pipe88CallbackType2(SceNetAdhocMatchingTarget *target);
+    void pipe88CallbackType2(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
     void pipe88CallbackType3(SceNetAdhocMatchingTarget *target);
     void pipeA0Callback(SceNetAdhocMatchingTarget *target);
     void pipeHelloCallback();
     
-    int broadcastBye();
+    int broadcastBye(EmuEnvState &emuenv, SceUID thread_id);
 
     void addHelloTimedFunct(uint64_t time_interval);
     void add88TimedFunct(SceNetAdhocMatchingTarget *target);
@@ -352,19 +352,19 @@ struct SceNetAdhocMatchingContext {
 
 class AdhocState {
 public:
-    int initializeMutex(EmuEnvState &emuenv);
-    int deleteMutex(EmuEnvState &emuenv);
-    std::mutex &getMutex(EmuEnvState &emuenv);
+    int initializeMutex();
+    int deleteMutex();
+    std::mutex &getMutex();
 
-    int createMSpace(EmuEnvState &emuenv,SceSize poolsize, void *poolptr);
-    int deleteMSpace(EmuEnvState &emuenv);
+    int createMSpace(SceSize poolsize, void *poolptr);
+    int deleteMSpace();
 
-    int initializeMatchingContextList(EmuEnvState &emuenv);
-    int isAnyMatchingContextRunning(EmuEnvState &emuenv);
-    SceNetAdhocMatchingContext *findMatchingContextById(EmuEnvState &emuenv,int id);
-    int createMatchingContext(EmuEnvState &emuenv,SceUShort16 port);
-    void deleteMatchingContext(EmuEnvState &emuenv,SceNetAdhocMatchingContext *ctx);
-    void deleteAllMatchingContext(EmuEnvState &emuenv);
+    int initializeMatchingContextList();
+    int isAnyMatchingContextRunning();
+    SceNetAdhocMatchingContext *findMatchingContextById(int id);
+    int createMatchingContext(SceUShort16 port);
+    void deleteMatchingContext(SceNetAdhocMatchingContext *ctx);
+    void deleteAllMatchingContext();
 
 public: // Globals
     bool is_initialized = false;
