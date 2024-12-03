@@ -35,7 +35,7 @@
 DECL_EXPORT(SceInt32, sceNetCtlAdhocGetInAddr, SceNetInAddr *inaddr);
 
 int sendHelloReqToPipe(void *arg);
-int adhocMatchingEventThread(EmuEnvState *emuenv, int id);
+int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id);
 int adhocMatchingInputThread(EmuEnvState *emuenv, int id);
 int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id);
 
@@ -211,14 +211,14 @@ struct SceNetAdhocMatchingTarget {
     SceSize optLength;
     char *opt;
 
-    SceNetAdhocMatchingPipeMessage msg28;
-    SceNetAdhocMatchingPipeMessage msg88;
+    SceNetAdhocMatchingPipeMessage pipeMsg28;
+    SceNetAdhocMatchingPipeMessage pipeMsg88;
 
     bool is_88_pending;
     int uuid2;
 
     int retryCount;
-    int msgPipeUid;
+    int msgPipeUid[2]; // 0 = read, 1 = write
 
     int unk_50;
     bool unk_54;
@@ -329,7 +329,7 @@ struct SceNetAdhocMatchingContext {
     int recvSocket; // Socket used by parent to broadcast
 
     std::thread eventThread;
-    int msgPipeUid;
+    int msgPipeUid[2]; // 0 = read, 1 = write
     std::thread inputThread;
 
     unsigned int totalHelloLength;
