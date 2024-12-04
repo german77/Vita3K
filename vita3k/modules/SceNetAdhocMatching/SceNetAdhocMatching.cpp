@@ -49,7 +49,7 @@ EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
 
-    ctx->sendCalloutA0Two(target);
+    ctx->addA0TimedFunction(emuenv, target);
     ctx->setTargetSendDataStatus(target, 1);
 
     return SCE_NET_ADHOC_MATCHING_OK;
@@ -89,7 +89,7 @@ EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
-        ctx->sendCallout88AndA0(foundTarget);
+        ctx->deleteAllTimedFunctions(emuenv, foundTarget);
         ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, optLen, opt);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         if (foundTarget->optLength > 0) {
@@ -199,7 +199,7 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
     ctx->closeEventHandler();
 
     if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP) {
-        ctx->resetHelloFunction();
+        ctx->deleteHelloTimedFunction(emuenv);
         ctx->resetHelloOpt();
         ctx->helloPipeMsg.flags &= 0xfffffffe;
     }
@@ -329,7 +329,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
             foundTarget->targetCount = 1;
 
         ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK2, foundTarget->optLength, foundTarget->opt);
-        ctx->add88TimedFunct(foundTarget);
+        ctx->add88TimedFunct(emuenv, foundTarget);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
         break;
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2:
@@ -354,7 +354,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
             foundTarget->targetCount = 1;
 
         ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, foundTarget->optLength, foundTarget->opt);
-        ctx->add88TimedFunct(foundTarget);
+        ctx->add88TimedFunct(emuenv, foundTarget);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
         foundTarget->retryCount = ctx->retryCount;
         break;
@@ -414,7 +414,7 @@ EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int dataLen
         target->sendDataLength = dataLen;
         target->sendDataCount++;
         ctx->sendDataMessageToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_DATA, target->sendDataLength, target->sendData);
-        ctx->sendCalloutA0(target);
+        ctx->addA0TimedFunction(emuenv, target);
         ctx->setTargetSendDataStatus(target, 2);
     }
 
@@ -491,7 +491,7 @@ EXPORT(int, sceNetAdhocMatchingStart, int id, int threadPriority, int threadStac
         return RET_ERROR(result);
     }
 
-    // result = ctx->initializeCalloutThread(emuenv, threadPriority, 0x1000, threadCpuAffinityMask);
+    result = ctx->calloutSyncing.initializeCalloutThread(emuenv, thread_id, ctx->id, threadPriority, 0x1000, threadCpuAffinityMask);
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
         ctx->closeInputThread(emuenv, thread_id);
         ctx->closeEventHandler();
@@ -500,16 +500,16 @@ EXPORT(int, sceNetAdhocMatchingStart, int id, int threadPriority, int threadStac
     }
 
     if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP) {
-        // result = ctx->setHelloOpt(helloOptlen, helloOpt);
+        result = ctx->setHelloOpt(helloOptlen, helloOpt);
         if (result != SCE_NET_ADHOC_MATCHING_OK) {
-            // ctx->closeCalloutThread();
+            ctx->calloutSyncing.closeCalloutThread();
             ctx->closeInputThread(emuenv, thread_id);
             ctx->closeEventHandler();
             ctx->closeSendSocket(emuenv, thread_id);
             return RET_ERROR(result);
         }
 
-        ctx->addHelloTimedFunct(ctx->helloInterval);
+        ctx->addHelloTimedFunct(emuenv, ctx->helloInterval);
     }
 
     ctx->createMembersList();
