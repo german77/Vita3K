@@ -61,11 +61,11 @@ void SceNetAdhocMatchingCalloutSyncing::closeCalloutThread() {
 }
 
 int SceNetAdhocMatchingCalloutSyncing::addTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, SceLong64 interval, int (*function)(void *), void *args) {
-    if (this->isInitialized) {
+    if (!this->isInitialized) {
         return SCE_NET_CALLOUT_ERROR_NOT_INITIALIZED;
     }
 
-    uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
     calloutFunction->function = function;
     calloutFunction->args = args;
     calloutFunction->execAt = now + interval;
@@ -102,7 +102,7 @@ int SceNetAdhocMatchingCalloutSyncing::addTimedFunction(SceNetAdhocMatchingCallo
 }
 
 int SceNetAdhocMatchingCalloutSyncing::deleteTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, bool *is_deleted) {
-    if (this->isInitialized) {
+    if (!this->isInitialized) {
         return SCE_NET_CALLOUT_ERROR_NOT_INITIALIZED;
     }
 

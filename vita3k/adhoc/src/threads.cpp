@@ -26,23 +26,13 @@
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
 
-int sendHelloReqToPipe(void *arg) {
-    SceNetAdhocMatchingContext *ctx = (SceNetAdhocMatchingContext *)arg;
-    if ((ctx->helloPipeMsg.flags & 1U) == 0) {
-        ctx->helloPipeMsg.type = SCE_NET_ADHOC_MATCHING_EVENT_HELLO_SEND;
-        ctx->helloPipeMsg.flags = ctx->helloPipeMsg.flags | 1;
-        ctx->helloPipeMsg.peer = nullptr;
-        //write(ctx->pipesFd[1], &ctx->helloPipeMsg, sizeof(ctx->helloPipeMsg));
-    }
-    return 0;
-}
-
 int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
     tracy::SetThreadName("adhocMatchingEventThread");
     auto ctx = emuenv->adhoc.findMatchingContextById(id);
 
     SceNetAdhocMatchingPipeMessage pipeMessage;
     while (read(ctx->msgPipeUid[0], &pipeMessage, sizeof(pipeMessage)) >= 0) {
+        LOG_CRITICAL("GOT SOME EVENTS");
         ZoneScopedC(0xFFC2C6);
         std::lock_guard<std::mutex> guard(emuenv->adhoc.getMutex());
         
@@ -86,9 +76,11 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
             ctx->helloPipeMsg.flags &= 0xfffffffe;
             int num = ctx->countTargetsWithStatusOrBetter(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES);
             // also count ourselves
+            int result = 0;
             if (num + 1 < ctx->maxnum)
-                ctx->broadcastHello(*emuenv, thread_id);
+                result = ctx->broadcastHello(*emuenv, thread_id);
 
+            LOG_INFO("result hellow {}",result);
             ctx->addHelloTimedFunct(*emuenv, ctx->helloInterval);
             break;
         }
@@ -135,9 +127,12 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
                 }
 
                 // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
+
+                LOG_CRITICAL("SOME INPUT");
             } while (fromAddr->sin_addr.s_addr == ctx->ownAddress || *ctx->rxbuf != 1);
             // we have a packet :D, but may be unfinished, check how long it is and see if we can get the remaining
 
+            LOG_CRITICAL("WE GOT DATA");
             SceUShort16 nPacketLength; // network byte order of packet length
             memcpy(&nPacketLength, ctx->rxbuf + 2, 2);
             SceUShort16 packetLenght = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
@@ -183,9 +178,10 @@ int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id) {
         ctx->calloutSyncing.mutex.lock();
 
         auto *entry = ctx->calloutSyncing.functionList;
-        uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+        uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 
         while (entry != nullptr && entry->execAt < now) {
+            LOG_CRITICAL("CALL SOMETHING DELAYED");
             ctx->calloutSyncing.mutex.unlock();
             entry->function(entry->args);
             ctx->calloutSyncing.mutex.lock();
