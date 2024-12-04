@@ -27,3 +27,4 @@ DECL_EXPORT(int, sceNetSocketClose, int sid);
 DECL_EXPORT(int, sceNetShutdown, int eid, int how);
 DECL_EXPORT(int, sceNetSendto, int sid, const void *msg, unsigned int len, int flags, const SceNetSockaddr *to, unsigned int tolen);
 DECL_EXPORT(int, sceNetSetsockopt, int sid, SceNetProtocol level, SceNetSocketOption optname, const int *optval, unsigned int optlen);
+DECL_EXPORT(int, sceNetRecvfrom, int sid, void *buf, unsigned int len, int flags, SceNetSockaddr *from, unsigned int *fromlen);

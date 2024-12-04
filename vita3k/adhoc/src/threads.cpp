@@ -18,8 +18,13 @@
 #include "module/module.h"
 
 #include <adhoc/state.h>
+#include <net/types.h>
+#include "../SceNet/SceNet.h"
 #include <chrono>
 #include <mutex>
+
+#include <util/tracy.h>
+TRACY_MODULE_NAME(SceNetAdhocMatching);
 
 int sendHelloReqToPipe(void *arg) {
     SceNetAdhocMatchingContext *ctx = (SceNetAdhocMatchingContext *)arg;
@@ -86,60 +91,62 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
     return 0;
 };
 
-int adhocMatchingInputThread(EmuEnvState *emuenv, int id) {
-    auto ctx = emuenv->adhoc.findMatchingContextById(id);
+int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
+    tracy::SetThreadName("adhocMatchingInputThread");
+    auto &emuenv = *emuenvn;
+    auto ctx = emuenv.adhoc.findMatchingContextById(id);
 
-    sockaddr_in *fromAddr;
-    socklen_t fromAddrLen = sizeof(*fromAddr);
+    SceNetSockaddrIn *fromAddr{};
+    unsigned int fromAddrLen = sizeof(SceNetSockaddrIn);
 
-    //while(true) {
-    //    int res;
-    //    SceUShort16 packetLength;
-    //    do {
-    //        do {
-    //            res = recvfrom(ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (sockaddr *)fromAddr, &fromAddrLen);
-    //            if (res < 0) {
-    //                assert(false);
-    //                return 0; // exit the thread immediatly
-    //            }
+    while (true) {
+        ZoneScopedC(0xFFC2C6);
+        int res;
+        SceUShort16 packetLength{};
+        do {
+            do {
+                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)fromAddr, &fromAddrLen);
+                if (res < SCE_NET_ADHOC_MATCHING_OK) {
+                    assert(false);
+                    return 0; // exit the thread immediatly
+                }
 
-    //            // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
-    //        } while (fromAddr->sin_addr.S_un.S_addr == ctx->ownAddress || *ctx->rxbuf != 1);
-    //        // we have a packet :D, but may be unfinished, check how long it is and see if we can get the remaining
+                // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
+            } while (fromAddr->sin_addr.s_addr == ctx->ownAddress || *ctx->rxbuf != 1);
+            // we have a packet :D, but may be unfinished, check how long it is and see if we can get the remaining
 
-    //        SceUShort16 nPacketLength; // network byte order of packet length
-    //        memcpy(&nPacketLength, ctx->rxbuf + 2, 2);
-    //        SceUShort16 packetLenght = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
-    //    } while (res < packetLength + 4);
-    //    // We received the whole packet, we can now commence the parsing and the fun
-    //    std::lock_guard<std::mutex> guard(emuenv->adhoc.getMutex());
-    //    auto foundTarget = ctx->findTargetByAddr(fromAddr->sin_addr.S_un.S_addr);
-    //    if (foundTarget == nullptr) {
-    //        uint8_t targetMode = *(ctx->rxbuf + 1);
-    //        if (((targetMode == SCE_NET_ADHOC_MATCHING_MODE_CHILD) && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP))) || ((targetMode == SCE_NET_ADHOC_MATCHING_MODE_PARENT && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_CHILD || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP)))))) {
-    //            foundTarget = ctx->newTarget(fromAddr->sin_addr.S_un.S_addr);
-    //        }
+            SceUShort16 nPacketLength; // network byte order of packet length
+            memcpy(&nPacketLength, ctx->rxbuf + 2, 2);
+            SceUShort16 packetLenght = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
+        } while (res < packetLength + 4);
+        // We received the whole packet, we can now commence the parsing and the fun
+        std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+        auto foundTarget = ctx->findTargetByAddr(fromAddr->sin_addr.s_addr);
+        if (foundTarget == nullptr) {
+            uint8_t targetMode = *(ctx->rxbuf + 1);
+            if (((targetMode == SCE_NET_ADHOC_MATCHING_MODE_CHILD) && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP))) || ((targetMode == SCE_NET_ADHOC_MATCHING_MODE_PARENT && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_CHILD || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP)))))) {
+                foundTarget = ctx->newTarget(fromAddr->sin_addr.s_addr);
+            }
 
-    //        if (((foundTarget->msg.flags & 1U) == 0)) {
-    //            auto rawPacket = new char[res];
-    //            if (rawPacket == nullptr)
-    //                continue;
+            if ((foundTarget->pipeMsg28.flags & 1U) == 0) {
+                auto rawPacket = new char[res];
+                if (rawPacket == nullptr)
+                    continue;
 
-    //            // Copy the whole packet we received into the peer
-    //            memcpy(rawPacket, ctx->rxbuf, res);
-    //            foundTarget->rawPacketLength = res;
-    //            foundTarget->rawPacket = rawPacket;
-    //            foundTarget->packetLength = packetLength + 4;
-    //            foundTarget->keepAliveInterval = ctx->keepAliveInterval;
+                // Copy the whole packet we received into the peer
+                memcpy(rawPacket, ctx->rxbuf, res);
+                foundTarget->rawPacketLength = res;
+                foundTarget->rawPacket = rawPacket;
+                foundTarget->packetLength = packetLength + 4;
+                foundTarget->keepAliveInterval = ctx->keepAliveInterval;
 
-    //            foundTarget->msg.type = SCE_NET_ADHOC_MATCHING_EVENT_PACKET;
-    //            foundTarget->msg.peer = foundTarget;
-    //            foundTarget->msg.flags = foundTarget->msg.flags | 1;
-    //            write(ctx->pipesFd[1], &foundTarget->msg, sizeof(foundTarget->msg));
-    //        }
-    //    }
-    //    emuenv->adhoc.mutex.unlock();
-    //}
+                foundTarget->pipeMsg28.type = SCE_NET_ADHOC_MATCHING_EVENT_PACKET;
+                foundTarget->pipeMsg28.peer = foundTarget;
+                foundTarget->pipeMsg28.flags = foundTarget->pipeMsg28.flags | 1;
+                write(ctx->msgPipeUid[1], &foundTarget->pipeMsg28, sizeof(foundTarget->pipeMsg28));
+            }
+        }
+    }
 
     return 0;
 };

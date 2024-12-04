@@ -36,8 +36,13 @@ DECL_EXPORT(SceInt32, sceNetCtlAdhocGetInAddr, SceNetInAddr *inaddr);
 
 int sendHelloReqToPipe(void *arg);
 int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id);
-int adhocMatchingInputThread(EmuEnvState *emuenv, int id);
+int adhocMatchingInputThread(EmuEnvState *emuenv, SceUID thread_id, int id);
 int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id);
+
+int pipe88CallbackType2(void *args);
+int pipe88CallbackType3(void *args);
+int pipeA0Callback(void *args);
+int pipeHelloCallback(void *args);
 
 struct SceNetAdhocHandlerArguments {
     uint32_t id;
@@ -76,6 +81,13 @@ enum SceNetAdhocMatchingErrorCode {
     SCE_NET_ADHOC_MATCHING_ERROR_NOT_ESTABLISHED = 0x80413117,
     SCE_NET_ADHOC_MATCHING_ERROR_DATA_BUSY = 0x80413118,
     SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ALIGNMENT = 0x80413119
+};
+
+enum SceNetCalloutErrorCode {
+    SCE_NET_CALLOUT_OK = 0x0,
+    SCE_NET_CALLOUT_ERROR_NOT_INITIALIZED = 0x80558001,
+    SCE_NET_CALLOUT_ERROR_NOT_TERMINATED = 0x80558002,
+    SCE_NET_CALLOUT_ERROR_DUPLICATED = 0x80558006,
 };
 
 enum SceNetAdhocMatchingMode : uint8_t {
@@ -197,6 +209,13 @@ struct SceNetAdhocMatchingMember {
     SceNetInAddr addr;
 };
 
+struct SceNetAdhocMatchingCalloutFunction {
+    SceNetAdhocMatchingCalloutFunction *next;
+    uint64_t execAt;
+    int (*function)(void *);
+    void *args;
+};
+
 struct SceNetAdhocMatchingTarget {
     SceNetAdhocMatchingTarget *next;
     SceNetAdhocMatchingTargetStatus status;
@@ -211,7 +230,7 @@ struct SceNetAdhocMatchingTarget {
     SceSize optLength;
     char *opt;
 
-    SceNetAdhocMatchingPipeMessage pipeMsg28;
+    SceNetAdhocMatchingPipeMessage pipeMsgA0;
     SceNetAdhocMatchingPipeMessage pipeMsg88;
 
     bool is_88_pending;
@@ -235,23 +254,23 @@ struct SceNetAdhocMatchingTarget {
     bool is_a0_pending;
     int context_uuid;
 
-    char* fun_unk_88;
-    char *fun_unk_a0;
-
-};
-
-struct SceNetAdhocMatchingCalloutFunction {
-    uint64_t execAt;
-    void *args;
+    SceNetAdhocMatchingCalloutFunction timedFunction88;
+    SceNetAdhocMatchingCalloutFunction timedFunctionA0;
 };
 
 struct SceNetAdhocMatchingCalloutSyncing {
+    int initializeCalloutThread(EmuEnvState &emuenv, SceUID thread_id, int id, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
+    void closeCalloutThread();
+
+    int addTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, SceLong64 interval, int (*function)(void *), void *args);
+    int deleteTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, bool *is_deleted);
+
     std::thread calloutThread;
-    std::mutex calloutMutex;
+    std::mutex mutex;
     std::condition_variable condvar;
-    bool calloutThreadIsRunning;
-    bool calloutShouldExit;
-    std::map<int (*)(void *), SceNetAdhocMatchingCalloutFunction> functions;
+    bool isInitialized;
+    bool shouldExit;
+    SceNetAdhocMatchingCalloutFunction* functionList;
 };
 
 struct SceNetAdhocMatchingContext {    
@@ -264,7 +283,7 @@ struct SceNetAdhocMatchingContext {
     int initializeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
     void closeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
 
-    void processPacketFromTarget(EmuEnvState *emuenv, SceNetAdhocMatchingTarget *peer);
+    void processPacketFromTarget(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *peer);
 
     // Target
     void setTargetSendDataStatus(SceNetAdhocMatchingTarget *target, int status);
@@ -289,24 +308,22 @@ struct SceNetAdhocMatchingContext {
     int setHelloOpt(SceSize optlen, void *opt);
     int broadcastHello(EmuEnvState &emuenv, SceUID thread_id);
     void resetHelloOpt();
-    void resetHelloFunction();
 
-    void sendCalloutA0(SceNetAdhocMatchingTarget *target);
-    void sendCalloutA0Two(SceNetAdhocMatchingTarget *target);
-    void SendCallout88(SceNetAdhocMatchingTarget *target);
-    void sendCallout88AndA0(SceNetAdhocMatchingTarget *target);
+    void addHelloTimedFunct(EmuEnvState &emuenv, uint64_t time_interval);
+    void addA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
+    void add88TimedFunct(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
+    void add88TimedFunctionWithParentInterval(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
+    void deleteHelloTimedFunction(EmuEnvState &emuenv);
+    void deleteA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
+    void deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
+
+    void notifyHandler(EmuEnvState *emuenv, int context_id, int type, SceNetInAddr *peer, int optLen, void *opt);
+
     int sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data);
     int sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt);
-    
-    void pipe88CallbackType2(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
-    void pipe88CallbackType3(SceNetAdhocMatchingTarget *target);
-    void pipeA0Callback(SceNetAdhocMatchingTarget *target);
-    void pipeHelloCallback();
-    
+        
     int broadcastBye(EmuEnvState &emuenv, SceUID thread_id);
 
-    void addHelloTimedFunct(uint64_t time_interval);
-    void add88TimedFunct(SceNetAdhocMatchingTarget *target);
 
     SceNetAdhocMatchingContext *next = nullptr;
     int id;
@@ -344,10 +361,11 @@ struct SceNetAdhocMatchingContext {
 
     SceNetAdhocMatchingTarget *targetList;
 
-    std::thread calloutThread;
     SceNetAdhocMatchingCalloutSyncing calloutSyncing;
+    SceNetAdhocMatchingCalloutFunction helloTimedFunction;
 
     uint32_t ownAddress;
+
 };
 
 class AdhocState {
