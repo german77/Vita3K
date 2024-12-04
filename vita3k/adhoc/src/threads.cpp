@@ -52,8 +52,8 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
 
         switch (type) {
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET: { // Packet received
-            target->pipeMsg28.flags &= ~1U;
-            ctx->processPacketFromTarget(emuenv, target);
+            target->pipeMsg88.flags &= ~1U;
+            ctx->processPacketFromTarget(*emuenv, target);
             if (target->rawPacket)
                 delete target->rawPacket;
             target->rawPacket = 0;
@@ -65,26 +65,49 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_UNK3: { // idk
-            // TODO
+            target->pipeMsg88.flags = (target->pipeMsg88).flags & 0xfffffffe;
+            if (target->status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED) {
+                break;
+            }
+            target->uuid2++;
+            if (target->uuid2 < 1) {
+                ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+                ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, 0, nullptr);
+                ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, nullptr);
+            } else {
+                if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
+                    ctx->sendMemberListToTarget(target);
+                }
+                ctx->add88TimedFunctionWithParentInterval(*emuenv, target);
+            }
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_HELLO_SEND: { // broadcast hello message to network
+            ctx->helloPipeMsg.flags &= 0xfffffffe;
             int num = ctx->countTargetsWithStatusOrBetter(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES);
             // also count ourselves
             if (num + 1 < ctx->maxnum)
                 ctx->broadcastHello(*emuenv, thread_id);
 
-            //if (ctx->searchTimedFunc(sendHelloReqToPipe)) {
-            //    ctx->delTimedFunc(sendHelloReqToPipe); // not run it, we are gonna reschedule it
-            //};
-            //ctx->addTimedFunc(sendHelloReqToPipe, ctx, ctx->helloInterval);
-            ctx->helloPipeMsg.flags &= ~1U;
+            ctx->addHelloTimedFunct(*emuenv, ctx->helloInterval);
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_UNK5: {
-            // TODO
+            target->msgA0.flags &= 0xfffffffe;
+            if (target->sendDataStatus != 2) {
+                break;
+            }
+            target->context_uuid++;
+            if (target->context_uuid < 1) {
+                ctx->setTargetSendDataStatus(target, 1);
+                ctx->notifyHandler(emuenv, ctx->id, 0xd, &target->addr, 0, nullptr);
+            }
             break;
         }
+        }
+
+        if (target != nullptr && target->unk_54 == 1 && (target->pipeMsg28.flags & 1) == 0 && (target->pipeMsg88.flags & 1) == 0) {
+            ctx->deleteTarget(target);
         }
     }
 
@@ -152,27 +175,49 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
 };
 
 int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id) {
+    tracy::SetThreadName("adhocMatchingCalloutThread");
     auto ctx = emuenv->adhoc.findMatchingContextById(id);
 
     do {
-        ctx->calloutSyncing.calloutMutex.lock();
+        ZoneScopedC(0xFFC2C6);
+        ctx->calloutSyncing.mutex.lock();
 
-        auto &list = ctx->calloutSyncing.functions;
+        auto *entry = ctx->calloutSyncing.functionList;
         uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-        for (auto &func : list) {
-            if (func.second.execAt > now)
-                continue;
 
-            // LOG_CRITICAL("running timed func");
-            ctx->calloutSyncing.calloutMutex.unlock();
-            (func.first)(func.second.args);
-            ctx->calloutSyncing.calloutMutex.lock();
-            // running callout func
-        };
-        // TODO: should something be done here?
-        ctx->calloutSyncing.calloutMutex.unlock();
-    } while (ctx->calloutSyncing.calloutShouldExit == false);
-    LOG_CRITICAL("calloutShouldExit:{}", ctx->calloutSyncing.calloutShouldExit);
+        while (entry != nullptr && entry->execAt < now) {
+            ctx->calloutSyncing.mutex.unlock();
+            entry->function(entry->args);
+            ctx->calloutSyncing.mutex.lock();
+
+            ctx->calloutSyncing.functionList = entry->next;
+            entry = ctx->calloutSyncing.functionList;
+        }
+
+        if (ctx->calloutSyncing.shouldExit) {
+            break;
+        }
+
+        uint64_t sleep_time = 0;
+        if (entry != nullptr) {
+            sleep_time = entry->execAt - now;
+        }
+
+        ctx->calloutSyncing.mutex.unlock();
+       
+        // Limit sleep time to something reasonable
+        if (sleep_time <= 0) {
+            sleep_time = 5;
+        }
+        if (sleep_time > 500) {
+            sleep_time = 500;
+        }
+
+        // TODO use ctx->calloutSyncing.condvar to break from this sleep early
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+    } while (ctx->calloutSyncing.shouldExit == false);
+
+    LOG_CRITICAL("calloutShouldExit:{}", ctx->calloutSyncing.shouldExit);
 
     return 0;
 };

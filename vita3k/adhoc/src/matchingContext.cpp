@@ -124,12 +124,12 @@ int SceNetAdhocMatchingContext::initializeEventHandler(EmuEnvState &emuenv, SceU
 
 void SceNetAdhocMatchingContext::closeEventHandler() {
     ZoneScopedC(0xF6C2FF);
-    // TODO: abort all pipe operations and make read operation return negative value on the pipe
+
+    close(this->msgPipeUid[0]);
+    close(this->msgPipeUid[1]);
 
     if (this->eventThread.joinable())
         this->eventThread.join();
-
-    // TODO: delete pipe here
 }
 
 void SceNetAdhocMatchingContext::closeSendSocket(EmuEnvState &emuenv, SceUID thread_id) {
@@ -544,7 +544,7 @@ int SceNetAdhocMatchingContext::setHelloOpt(SceSize optlen, void *opt) {
     message->helloInterval = helloInterval;
     message->rexmtInterval = keepAliveInterval;
     message->unk_6c = 1;
-    memcpy(message->zero, 0, 0xc);
+    memset(message->zero, 0, 0xc);
 
     if (optlen > 0) {
         message->optBuffer.resize(optlen);
@@ -592,7 +592,7 @@ void SceNetAdhocMatchingContext::resetHelloOpt() {
 
 void SceNetAdhocMatchingContext::addHelloTimedFunct(EmuEnvState &emuenv, uint64_t time_interval) {
     ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    //std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (shouldHelloReqBeProcessed) {
         calloutSyncing.deleteTimedFunction(&helloTimedFunction, nullptr);
         shouldHelloReqBeProcessed = false;
@@ -672,6 +672,7 @@ void SceNetAdhocMatchingContext::deleteAllTimedFunctions(EmuEnvState &emuenv, Sc
 }
 
 void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState *emuenv, int context_id, int type, SceNetInAddr *peer, int optLen, void *opt) {
+    ZoneScopedC(0xF6C2FF);
     if (!this->handler.entry) {
         return;
     }
@@ -792,6 +793,7 @@ int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID 
 }
 
 int SceNetAdhocMatchingContext::broadcastBye(EmuEnvState &emuenv, SceUID thread_id) {
+    ZoneScopedC(0xF6C2FF);
     const int flags = 0x400; // 0x480 if sdk version < 0x1500000
 
     const SceNetAdhocMatchingByeMessage byeMsg = {
@@ -841,6 +843,7 @@ int pipe88CallbackType3(void *args) {
         write(target->msgPipeUid[1], &target->pipeMsg88, sizeof(SceNetAdhocMatchingPipeMessage));
     }
     target->is_88_pending = false;
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 int pipeA0Callback(void *args) {
@@ -851,9 +854,10 @@ int pipeA0Callback(void *args) {
         target->msgA0.peer = target;
         target->msgA0.flags |= 1;
         target->msgA0.type = SCE_NET_ADHOC_MATCHING_EVENT_UNK5;
-        write(target->msgPipeUid[1], &target->pipeMsgA0, sizeof(SceNetAdhocMatchingPipeMessage));
+        write(target->msgPipeUid[1], &target->msgA0, sizeof(SceNetAdhocMatchingPipeMessage));
     }
     target->is_a0_pending = false;
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 int pipeHelloCallback(void *args) {
@@ -867,4 +871,5 @@ int pipeHelloCallback(void *args) {
         write(ctx->msgPipeUid[1], &ctx->helloPipeMsg, sizeof(SceNetAdhocMatchingPipeMessage));
     }
     ctx->shouldHelloReqBeProcessed = false;
+    return SCE_NET_ADHOC_MATCHING_OK;
 }
