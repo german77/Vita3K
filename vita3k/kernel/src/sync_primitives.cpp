@@ -97,7 +97,7 @@ inline int handle_timeout(const ThreadStatePtr &thread, std::unique_lock<std::mu
 
             queue->erase(data_it);
 
-            return RET_ERROR(SCE_KERNEL_ERROR_WAIT_TIMEOUT);
+            return SCE_KERNEL_ERROR_WAIT_TIMEOUT;
         } else {
             auto end = std::chrono::steady_clock::now();
             uint32_t real_timeout = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count());

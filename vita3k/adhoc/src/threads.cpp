@@ -26,17 +26,6 @@
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
 
-int sendHelloReqToPipe(void *arg) {
-    SceNetAdhocMatchingContext *ctx = (SceNetAdhocMatchingContext *)arg;
-    if ((ctx->helloPipeMsg.flags & 1U) == 0) {
-        ctx->helloPipeMsg.type = SCE_NET_ADHOC_MATCHING_EVENT_HELLO_SEND;
-        ctx->helloPipeMsg.flags = ctx->helloPipeMsg.flags | 1;
-        ctx->helloPipeMsg.peer = nullptr;
-        //write(ctx->pipesFd[1], &ctx->helloPipeMsg, sizeof(ctx->helloPipeMsg));
-    }
-    return 0;
-}
-
 int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
     tracy::SetThreadName("adhocMatchingEventThread");
     auto ctx = emuenv->adhoc.findMatchingContextById(id);
@@ -50,53 +39,102 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
         auto target = pipeMessage.peer;
         pipeMessage.flags &= ~1U; // get rid of last bit
 
+        LOG_INFO("event: {}",type);
         switch (type) {
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET: { // Packet received
-            target->pipeMsg28.flags &= ~1U;
-            ctx->processPacketFromTarget(emuenv, target);
+            target->pipeMsg88.flags &= ~1U;
+            ctx->processPacketFromTarget(*emuenv,thread_id, target);
             if (target->rawPacket)
                 delete target->rawPacket;
             target->rawPacket = 0;
             target->rawPacketLength = 0;
             break;
         }
-        case SCE_NET_ADHOC_MATCHING_EVENT_UNK2: { // idk
-            // TODO
+        case SCE_NET_ADHOC_MATCHING_EVENT_UNK2: {
+            target->pipeMsg88.flags &= ~1U;
+            if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2) {
+                if (target->retryCount-- > 0) {
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
+                    ctx->add88TimedFunct(*emuenv, target);
+                }
+                else {
+                    ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void*)0x0);
+                }
+            }
+            if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
+                target->retryCount++;
+                if (target->retryCount < 1) {
+                    ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void*)0x0);
+                }
+                else {
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
+                    ctx->add88TimedFunct(*emuenv, target);
+                }
+            }
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_UNK3: { // idk
-            // TODO
+            target->pipeMsg88.flags = (target->pipeMsg88).flags & 0xfffffffe;
+            if (target->status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED) {
+                break;
+            }
+            target->uuid2++;
+            if (target->uuid2 < 1) {
+                ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+                ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, nullptr);
+            }
+            else {
+                if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
+                    ctx->sendMemberListToTarget(target);
+                }
+                ctx->add88TimedFunctionWithParentInterval(*emuenv, target);
+            }
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_HELLO_SEND: { // broadcast hello message to network
+            ctx->helloPipeMsg.flags &= 0xfffffffe;
             int num = ctx->countTargetsWithStatusOrBetter(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES);
             // also count ourselves
+            int result = 0;
             if (num + 1 < ctx->maxnum)
-                ctx->broadcastHello(*emuenv, thread_id);
+                result = ctx->broadcastHello(*emuenv, thread_id);
 
-            //if (ctx->searchTimedFunc(sendHelloReqToPipe)) {
-            //    ctx->delTimedFunc(sendHelloReqToPipe); // not run it, we are gonna reschedule it
-            //};
-            //ctx->addTimedFunc(sendHelloReqToPipe, ctx, ctx->helloInterval);
-            ctx->helloPipeMsg.flags &= ~1U;
+            ctx->addHelloTimedFunct(*emuenv, ctx->helloInterval);
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_UNK5: {
-            // TODO
+            target->msgA0.flags &= 0xfffffffe;
+            if (target->sendDataStatus != 2) {
+                break;
+            }
+            target->context_uuid++;
+            if (target->context_uuid < 1) {
+                ctx->setTargetSendDataStatus(target, 1);
+                ctx->notifyHandler(emuenv, ctx->id, 0xd, &target->addr, 0, nullptr);
+            }
             break;
         }
+        }
+
+        if (target != nullptr && target->unk_54 == 1 && (target->pipeMsg28.flags & 1) == 0 && (target->pipeMsg88.flags & 1) == 0) {
+            ctx->deleteTarget(target);
         }
     }
 
     return 0;
 };
 
-int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
+int adhocMatchingInputThread(EmuEnvState* emuenvn, SceUID thread_id, int id) {
     tracy::SetThreadName("adhocMatchingInputThread");
-    auto &emuenv = *emuenvn;
+    auto& emuenv = *emuenvn;
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
 
-    SceNetSockaddrIn *fromAddr{};
+    SceNetSockaddrIn fromAddr{};
     unsigned int fromAddrLen = sizeof(SceNetSockaddrIn);
 
     while (true) {
@@ -105,46 +143,63 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
         SceUShort16 packetLength{};
         do {
             do {
-                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)fromAddr, &fromAddrLen);
+                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr*)&fromAddr, &fromAddrLen);
                 if (res < SCE_NET_ADHOC_MATCHING_OK) {
-                    assert(false);
                     return 0; // exit the thread immediatly
                 }
+            } while (*ctx->rxbuf != 1);
 
-                // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
-            } while (fromAddr->sin_addr.s_addr == ctx->ownAddress || *ctx->rxbuf != 1);
-            // we have a packet :D, but may be unfinished, check how long it is and see if we can get the remaining
+            // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
+            if(fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort){
+                continue;
+            }
+
+            uint8_t addr[4];
+            memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
+            std::string data = std::string(ctx->rxbuf, res);
+            LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
 
             SceUShort16 nPacketLength; // network byte order of packet length
             memcpy(&nPacketLength, ctx->rxbuf + 2, 2);
-            SceUShort16 packetLenght = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
+            packetLength = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
         } while (res < packetLength + 4);
         // We received the whole packet, we can now commence the parsing and the fun
         std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
-        auto foundTarget = ctx->findTargetByAddr(fromAddr->sin_addr.s_addr);
-        if (foundTarget == nullptr) {
-            uint8_t targetMode = *(ctx->rxbuf + 1);
-            if (((targetMode == SCE_NET_ADHOC_MATCHING_MODE_CHILD) && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP))) || ((targetMode == SCE_NET_ADHOC_MATCHING_MODE_PARENT && ((ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_CHILD || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP)))))) {
-                foundTarget = ctx->newTarget(fromAddr->sin_addr.s_addr);
+        auto target = ctx->findTargetByAddr(fromAddr.sin_addr.s_addr);
+
+        
+        // No target found try to create one
+        if (target == nullptr) {
+            SceNetAdhocMatchingPacketType type = *(SceNetAdhocMatchingPacketType *)(ctx->rxbuf + 1);
+            if (type == SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK && (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP)) {
+                target = ctx->newTarget(fromAddr.sin_addr.s_addr);
             }
-
-            if ((foundTarget->pipeMsg28.flags & 1U) == 0) {
-                auto rawPacket = new char[res];
-                if (rawPacket == nullptr)
-                    continue;
-
-                // Copy the whole packet we received into the peer
-                memcpy(rawPacket, ctx->rxbuf, res);
-                foundTarget->rawPacketLength = res;
-                foundTarget->rawPacket = rawPacket;
-                foundTarget->packetLength = packetLength + 4;
-                foundTarget->keepAliveInterval = ctx->keepAliveInterval;
-
-                foundTarget->pipeMsg28.type = SCE_NET_ADHOC_MATCHING_EVENT_PACKET;
-                foundTarget->pipeMsg28.peer = foundTarget;
-                foundTarget->pipeMsg28.flags = foundTarget->pipeMsg28.flags | 1;
-                write(ctx->msgPipeUid[1], &foundTarget->pipeMsg28, sizeof(foundTarget->pipeMsg28));
+            if (type == SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO && (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_CHILD || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP)) {
+                target = ctx->newTarget(fromAddr.sin_addr.s_addr);
             }
+        }
+
+        // No target available
+        if (target == nullptr) {
+            continue;
+        }
+
+        if ((target->pipeMsg28.flags & 1U) == 0) {
+            auto rawPacket = new char[res];
+            if (rawPacket == nullptr)
+                continue;
+
+            // Copy the whole packet we received into the peer
+            memcpy(rawPacket, ctx->rxbuf, res);
+            target->rawPacketLength = res;
+            target->rawPacket = rawPacket;
+            target->packetLength = packetLength + 4;
+            target->keepAliveInterval = ctx->keepAliveInterval;
+
+            target->pipeMsg28.type = SCE_NET_ADHOC_MATCHING_EVENT_PACKET;
+            target->pipeMsg28.peer = target;
+            target->pipeMsg28.flags |= 1;
+            write(ctx->msgPipeUid[1], &target->pipeMsg28, sizeof(target->pipeMsg28));
         }
     }
 
@@ -152,27 +207,50 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
 };
 
 int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id) {
+    tracy::SetThreadName("adhocMatchingCalloutThread");
     auto ctx = emuenv->adhoc.findMatchingContextById(id);
 
     do {
-        ctx->calloutSyncing.calloutMutex.lock();
+        ZoneScopedC(0xFFC2C6);
+        ctx->calloutSyncing.mutex.lock();
 
-        auto &list = ctx->calloutSyncing.functions;
+        auto *entry = ctx->calloutSyncing.functionList;
         uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-        for (auto &func : list) {
-            if (func.second.execAt > now)
-                continue;
 
-            // LOG_CRITICAL("running timed func");
-            ctx->calloutSyncing.calloutMutex.unlock();
-            (func.first)(func.second.args);
-            ctx->calloutSyncing.calloutMutex.lock();
-            // running callout func
-        };
-        // TODO: should something be done here?
-        ctx->calloutSyncing.calloutMutex.unlock();
-    } while (ctx->calloutSyncing.calloutShouldExit == false);
-    LOG_CRITICAL("calloutShouldExit:{}", ctx->calloutSyncing.calloutShouldExit);
+        while (entry != nullptr && entry->execAt < now) {
+            ctx->calloutSyncing.mutex.unlock();
+            entry->function(entry->args);
+            ctx->calloutSyncing.mutex.lock();
+
+            ctx->calloutSyncing.functionList = entry->next;
+            entry = ctx->calloutSyncing.functionList;
+        }
+
+        if (ctx->calloutSyncing.shouldExit) {
+            ctx->calloutSyncing.mutex.unlock();
+            break;
+        }
+
+        uint64_t sleep_time = 0;
+        if (entry != nullptr) {
+            sleep_time = entry->execAt - now;
+        }
+
+        ctx->calloutSyncing.mutex.unlock();
+       
+        // Limit sleep time to something reasonable
+        if (sleep_time <= 0) {
+            sleep_time = 1;
+        }
+        if (sleep_time > 500) {
+            sleep_time = 500;
+        }
+
+        // TODO use ctx->calloutSyncing.condvar to break from this sleep early
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+    } while (ctx->calloutSyncing.shouldExit == false);
+
+    LOG_CRITICAL("calloutShouldExit:{}", ctx->calloutSyncing.shouldExit);
 
     return 0;
 };

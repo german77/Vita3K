@@ -19,6 +19,8 @@
 #include <module/module.h>
 
 #include <adhoc/state.h>
+#include <kernel/state.h>
+#include <util/lock_and_find.h>
 
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
@@ -90,7 +92,7 @@ EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
         ctx->deleteAllTimedFunctions(emuenv, foundTarget);
-        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, optLen, opt);
+        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, optLen, opt);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         if (foundTarget->optLength > 0) {
             delete foundTarget->opt;
@@ -168,7 +170,8 @@ EXPORT(int, sceNetAdhocMatchingCreate, SceNetAdhocMatchingMode mode, int maxnum,
     ctx->targetList = nullptr;
 
     SceNetAdhocMatchingHandler handler{
-        .entry = handlerAddr,
+        .pc = handlerAddr.address(),
+        .thread = thread_id,
     };
 
     ctx->handler = handler;
@@ -328,7 +331,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
         if (foundTarget->targetCount == 0)
             foundTarget->targetCount = 1;
 
-        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK2, foundTarget->optLength, foundTarget->opt);
+        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, foundTarget->optLength, foundTarget->opt);
         ctx->add88TimedFunct(emuenv, foundTarget);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
         break;

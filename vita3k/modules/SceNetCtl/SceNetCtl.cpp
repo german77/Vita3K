@@ -230,7 +230,7 @@ EXPORT(int, sceNetCtlInetGetInfo, int code, SceNetCtlInfo *info) {
         // TODO: windows has its own functions for getting the ipv4 addr of the host in a local network
         // what we are doing here right now is not enough filtering and its probably better to use them
         char devname[80];
-        gethostname(devname, 80);
+        auto error =gethostname(devname, 80);
         struct hostent *resolved = gethostbyname(devname);
         for (int i = 0; resolved->h_addr_list[i] != nullptr; ++i) {
             struct in_addr addrIn;

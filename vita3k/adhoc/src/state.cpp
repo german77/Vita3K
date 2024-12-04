@@ -98,8 +98,10 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
     }
 
     int next_id = 1;
-    if (matchingCtxCount != SCE_NET_ADHOC_MATCHING_MAXNUM - 1)
-        next_id = matchingCtxCount + 1;
+
+    if (matchingCtxCount < SCE_NET_ADHOC_MATCHING_MAXNUM - 1) {
+        matchingCtxCount++;
+    }
 
     while (true) {
         // We did a full loop. There are no id available.
@@ -148,7 +150,9 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
             previous_ctx = context;
             continue;
         }
-
+        if (matchingCtxCount > 1) {
+            matchingCtxCount--;
+        }
         if (previous_ctx != nullptr) {
             previous_ctx->next = context->next;
             break;

@@ -479,22 +479,24 @@ bool download_file(const std::string &url, const std::string &output_file_path, 
 
 void getAllAssignedAddrs(std::vector<AssignedAddr> &outAddrs) {
     outAddrs.clear();
-    outAddrs.push_back({ "127.0.0.1", "lo" });
 #ifdef _WIN32
+    outAddrs.push_back({"localhost", "127.0.0.1" });
     //  TODO: re do this to match linux version
     char devname[80];
-    gethostname(devname, 80);
+    auto error = gethostname(devname, 80);
     struct hostent *resolved = gethostbyname(devname);
     for (int i = 0; resolved->h_addr_list[i] != nullptr; ++i) {
         struct in_addr addrIn;
         memcpy(&addrIn, resolved->h_addr_list[i], sizeof(uint32_t));
         char *addr = inet_ntoa(addrIn);
         if (strcmp(addr, "127.0.0.1") != 0) {
-            //strcpy(info->ip_address, addr);
-            break;
+            AssignedAddr newAddr = {};
+            newAddr.addr = std::string(addr);
+            outAddrs.push_back(newAddr);
         }
     }
 #else
+    outAddrs.push_back({ "lo", "127.0.0.1" });
     struct ifaddrs *ifAddrStruct = NULL;
     struct ifaddrs *ifa = NULL;
     void *tmpAddrPtr = NULL;

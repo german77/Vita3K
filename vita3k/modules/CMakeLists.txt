@@ -102,6 +102,7 @@ set(SOURCE_LIST
 	SceNearDialogUtil/SceNearDialogUtil.cpp
 	SceNearUtil/SceNearUtil.cpp
 	SceNet/SceNet.cpp
+	SceNet/SceNet.h
 	SceNetInternal/SceNetInternal.cpp
 	SceNetAdhocMatching/SceNetAdhocMatching.cpp
 	SceNetCtl/SceNetCtl.cpp
