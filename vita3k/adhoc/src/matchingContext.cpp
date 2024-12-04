@@ -64,12 +64,8 @@ void SceNetAdhocMatchingContext::closeInputThread(EmuEnvState &emuenv, SceUID th
     if (this->inputThread.joinable())
         this->inputThread.join();
 
-#ifdef _WIN32
-    shutdown(this->recvSocket, SD_BOTH);
-#else
-    shutdown(this->recvSocket, SHUT_RDWR);
-#endif
-
+    
+    CALL_EXPORT(sceNetShutdown, this->recvSocket, 0);
     CALL_EXPORT(sceNetSocketClose, this->recvSocket);
     this->recvSocket = 0;
 }
@@ -561,8 +557,9 @@ int SceNetAdhocMatchingContext::setHelloOpt(SceSize optlen, void *opt) {
 };
 
 int SceNetAdhocMatchingContext::broadcastHello(EmuEnvState &emuenv, SceUID thread_id) {
+    LOG_CRITICAL("Broadcast hello");
     ZoneScopedC(0xF6C2FF);
-    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+    int flags = 0x480; // 0x480 if sdk version < 0x1500000
 
     SceNetSockaddrIn addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
@@ -713,6 +710,7 @@ void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState *emuenv, int context_
 
 int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data) {
     ZoneScopedC(0xF6C2FF);
+    LOG_CRITICAL("Send message");
     int flags = 0x400; // 0x480 if sdk version < 0x1500000
 
     auto *msg = new SceNetAdhocMatchingDataMessage();
@@ -749,6 +747,7 @@ int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, Sce
 
 int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt) {
     ZoneScopedC(0xF6C2FF);
+    LOG_CRITICAL("Send OPT DATA");
     int flags = 0x400; // 0x480 if sdk version < 0x1500000
     int headerSize = 4;
 
@@ -794,6 +793,7 @@ int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID 
 
 int SceNetAdhocMatchingContext::broadcastBye(EmuEnvState &emuenv, SceUID thread_id) {
     ZoneScopedC(0xF6C2FF);
+    LOG_CRITICAL("BROADCAST BYE");
     const int flags = 0x400; // 0x480 if sdk version < 0x1500000
 
     const SceNetAdhocMatchingByeMessage byeMsg = {
