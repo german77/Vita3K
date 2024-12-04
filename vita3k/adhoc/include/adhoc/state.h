@@ -230,7 +230,7 @@ struct SceNetAdhocMatchingTarget {
     SceSize optLength;
     char *opt;
 
-    SceNetAdhocMatchingPipeMessage pipeMsgA0;
+    SceNetAdhocMatchingPipeMessage pipeMsg28;
     SceNetAdhocMatchingPipeMessage pipeMsg88;
 
     bool is_88_pending;
