@@ -122,7 +122,6 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
             do {
                 res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)fromAddr, &fromAddrLen);
                 if (res < SCE_NET_ADHOC_MATCHING_OK) {
-                    assert(false);
                     return 0; // exit the thread immediatly
                 }
 
@@ -178,7 +177,7 @@ int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id) {
         ctx->calloutSyncing.mutex.lock();
 
         auto *entry = ctx->calloutSyncing.functionList;
-        uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+        uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 
         while (entry != nullptr && entry->execAt < now) {
             LOG_CRITICAL("CALL SOMETHING DELAYED");
@@ -203,7 +202,7 @@ int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id) {
        
         // Limit sleep time to something reasonable
         if (sleep_time <= 0) {
-            sleep_time = 5;
+            sleep_time = 1;
         }
         if (sleep_time > 500) {
             sleep_time = 500;

@@ -33,18 +33,25 @@ TRACY_MODULE_NAME(SceNetAdhocMatching);
 
 int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUID thread_id, int threadPriority, int threadStackSize, int threadCpuAffinityMask) {
     ZoneScopedC(0xF6C2FF);
+
     int socket_uid = CALL_EXPORT(sceNetSocket, "SceNetAdhocMatchingRecv", AF_INET, SCE_NET_SOCK_DGRAM_P2P, SCE_NET_IPPROTO_IP);
     if (socket_uid < SCE_NET_ADHOC_MATCHING_OK)
         return socket_uid;
 
     this->recvSocket = socket_uid;
 
+    const int flag = 1;
+    int result = CALL_EXPORT(sceNetSetsockopt, this->recvSocket, SCE_NET_SOL_SOCKET, SCE_NET_SO_REUSEADDR, &flag, sizeof(flag));
+    if (result < SCE_NET_ADHOC_MATCHING_OK) {
+        CALL_EXPORT(sceNetSocketClose, this->recvSocket);
+        return result;
+    }
+
     SceNetSockaddrIn recv_addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
         .sin_family = AF_INET,
         .sin_port = htons(0xe4a),
         .sin_addr = htonl(INADDR_ANY),
-        .sin_vport = htons(port),
     };
 
     auto bindResult = CALL_EXPORT(sceNetBind, this->recvSocket, (SceNetSockaddr *)&recv_addr, sizeof(SceNetSockaddrIn));
@@ -76,9 +83,11 @@ int SceNetAdhocMatchingContext::initializeSendSocket(EmuEnvState &emuenv, SceUID
     CALL_EXPORT(sceNetCtlAdhocGetInAddr, &ownAddr);
     this->ownAddress = ownAddr.s_addr;
 
-    this->sendSocket = CALL_EXPORT(sceNetSocket, "SceNetAdhocMatchingSend", AF_INET, SCE_NET_SOCK_DGRAM_P2P, SCE_NET_IPPROTO_IP);
-    if (this->sendSocket < 0)
-        return this->sendSocket;
+    int socket_uid = CALL_EXPORT(sceNetSocket, "SceNetAdhocMatchingSend", AF_INET, SCE_NET_SOCK_DGRAM_P2P, SCE_NET_IPPROTO_IP);
+    if (socket_uid < SCE_NET_ADHOC_MATCHING_OK)
+        return socket_uid;
+
+    this->sendSocket = socket_uid;
 
     SceNetSockaddrIn addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
@@ -439,10 +448,15 @@ int SceNetAdhocMatchingContext::createMembersList() {
 
 int SceNetAdhocMatchingContext::getMembers(SceSize *membersNum, SceNetAdhocMatchingMember *members) {
     ZoneScopedC(0xF6C2FF);
-    SceSize member_count = (memberMsgSize - 8) / sizeof(SceNetInAddr);
+    SceSize member_count = (memberMsgSize - 4) / sizeof(SceNetInAddr);
     SceSize count = 0;
 
-    for (SceSize i = 0; i < member_count; i++) {
+    if (*membersNum > 0 && member_count > 0) {
+        memcpy(&members[count], &memberMsg->parent, sizeof(SceNetAdhocMatchingMember));
+        count++;
+    }
+
+    for (SceSize i = 0; i < member_count -1; i++) {
         if (count >= *membersNum) {
             break;
         }
@@ -458,7 +472,7 @@ int SceNetAdhocMatchingContext::getMembers(SceSize *membersNum, SceNetAdhocMatch
 
 int SceNetAdhocMatchingContext::sendMemberListToTarget(SceNetAdhocMatchingTarget *target) {
     ZoneScopedC(0xF6C2FF);
-    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+    int flags = 0x0; // 0x480 if sdk version < 0x1500000
 
     SceNetSockaddrIn addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
@@ -559,14 +573,14 @@ int SceNetAdhocMatchingContext::setHelloOpt(SceSize optlen, void *opt) {
 int SceNetAdhocMatchingContext::broadcastHello(EmuEnvState &emuenv, SceUID thread_id) {
     LOG_CRITICAL("Broadcast hello");
     ZoneScopedC(0xF6C2FF);
-    int flags = 0x480; // 0x480 if sdk version < 0x1500000
+    int flags = 0x0; // 0x480 if sdk version < 0x1500000
 
     SceNetSockaddrIn addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
         .sin_family = AF_INET,
         .sin_port = htons(0xe4a),
-        .sin_addr = INADDR_BROADCAST,
-        .sin_vport = htons(port),
+        .sin_addr = htonl(INADDR_BROADCAST),
+        //.sin_vport = htons(port),
     };
 
     auto result = CALL_EXPORT(sceNetSendto, this->sendSocket, (char *)this->helloMsg, this->totalHelloLength, flags, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
@@ -711,7 +725,7 @@ void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState *emuenv, int context_
 int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data) {
     ZoneScopedC(0xF6C2FF);
     LOG_CRITICAL("Send message");
-    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+    int flags = 0x0; // 0x480 if sdk version < 0x1500000
 
     auto *msg = new SceNetAdhocMatchingDataMessage();
 
@@ -748,7 +762,7 @@ int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, Sce
 int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt) {
     ZoneScopedC(0xF6C2FF);
     LOG_CRITICAL("Send OPT DATA");
-    int flags = 0x400; // 0x480 if sdk version < 0x1500000
+    int flags = 0x0; // 0x480 if sdk version < 0x1500000
     int headerSize = 4;
 
     auto *msg = new SceNetAdhocMatchingOptMessage();
@@ -794,7 +808,7 @@ int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID 
 int SceNetAdhocMatchingContext::broadcastBye(EmuEnvState &emuenv, SceUID thread_id) {
     ZoneScopedC(0xF6C2FF);
     LOG_CRITICAL("BROADCAST BYE");
-    const int flags = 0x400; // 0x480 if sdk version < 0x1500000
+    const int flags = 0x0; // 0x480 if sdk version < 0x1500000
 
     const SceNetAdhocMatchingByeMessage byeMsg = {
         .one = 1,
