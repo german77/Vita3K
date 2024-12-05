@@ -17,6 +17,7 @@
 
 #include <cstring>
 #include <net/socket.h>
+#include <util/log.h>
 
 // NOTE: This should be SCE_NET_##errname but it causes vitaQuake to softlock in online games
 #ifdef _WIN32
@@ -127,6 +128,7 @@ static void convertSceSockaddrToPosix(const SceNetSockaddr *src, sockaddr *dst) 
     const SceNetSockaddrIn *src_in = (const SceNetSockaddrIn *)src;
     sockaddr_in *dst_in = (sockaddr_in *)dst;
     dst_in->sin_family = src_in->sin_family;
+    dst_in->sin_port = src_in->sin_port;
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
@@ -149,6 +151,9 @@ int PosixSocket::connect(const SceNetSockaddr *addr, unsigned int namelen) {
 int PosixSocket::bind(const SceNetSockaddr *addr, unsigned int addrlen) {
     sockaddr addr2;
     convertSceSockaddrToPosix(addr, &addr2);
+    sockaddr_in *inaddr = (sockaddr_in *)addr;
+    LOG_ERROR("bind {} {}", sock, sizeof(sockaddr_in));
+    LOG_ERROR("bindadd {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr);
     return translate_return_value(::bind(sock, &addr2, sizeof(sockaddr_in)));
 }
 
@@ -204,6 +209,7 @@ static int translate_sockopt_level(int level) {
 
 #define CASE_SETSOCKOPT(opt) \
     case SCE_NET_##opt:      \
+        LOG_ERROR("setsockopt {} {} {} {} {}", sock, level, opt, *((int*)optval), optlen); \
         return translate_return_value(setsockopt(sock, level, opt, (const char *)optval, optlen))
 
 #define CASE_SETSOCKOPT_VALUE(opt, value) \
@@ -356,8 +362,12 @@ int PosixSocket::send_packet(const void *msg, unsigned int len, int flags, const
     if (to != nullptr) {
         sockaddr addr;
         convertSceSockaddrToPosix(to, &addr);
+        sockaddr_in *inaddr = (sockaddr_in *)&addr;
+        LOG_ERROR("sendto {} {} {} {} {}", sock, (int)msg, len, flags, sizeof(sockaddr_in));
+        //LOG_ERROR("sendtoadd {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr);
         return translate_return_value(sendto(sock, (const char *)msg, len, flags, &addr, sizeof(sockaddr_in)));
     } else {
+        LOG_ERROR("sendto {} {} {} {}",sock,(int)msg,len,flags);
         return translate_return_value(send(sock, (const char *)msg, len, flags));
     }
 }

@@ -581,6 +581,7 @@ EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, S
         break;
     }
 
+    LOG_ERROR("socket {} {} {}", domain, hostSockType, static_cast<int>(protocol));
     SocketPtr sock = std::make_shared<PosixSocket>(domain, hostSockType, protocol);
     auto id = ++emuenv.net.next_id;
     emuenv.net.socks.emplace(id, sock);

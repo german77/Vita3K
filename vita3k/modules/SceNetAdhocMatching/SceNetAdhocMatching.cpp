@@ -328,7 +328,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
         if (foundTarget->targetCount == 0)
             foundTarget->targetCount = 1;
 
-        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK2, foundTarget->optLength, foundTarget->opt);
+        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, foundTarget->optLength, foundTarget->opt);
         ctx->add88TimedFunct(emuenv, foundTarget);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
         break;
