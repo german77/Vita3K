@@ -40,18 +40,19 @@ int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUI
 
     this->recvSocket = socket_uid;
 
-    const int flag = 1;
+    /* const int flag = 1;
     int result = CALL_EXPORT(sceNetSetsockopt, this->recvSocket, SCE_NET_SOL_SOCKET, SCE_NET_SO_REUSEADDR, &flag, sizeof(flag));
     if (result < SCE_NET_ADHOC_MATCHING_OK) {
         CALL_EXPORT(sceNetSocketClose, this->recvSocket);
         return result;
-    }
+    }*/
 
     SceNetSockaddrIn recv_addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
         .sin_family = AF_INET,
         .sin_port = htons(0xe4a),
         .sin_addr = htonl(INADDR_ANY),
+        .sin_vport = htons(port),
     };
 
     auto bindResult = CALL_EXPORT(sceNetBind, this->recvSocket, (SceNetSockaddr *)&recv_addr, sizeof(SceNetSockaddrIn));
@@ -92,19 +93,19 @@ int SceNetAdhocMatchingContext::initializeSendSocket(EmuEnvState &emuenv, SceUID
     SceNetSockaddrIn addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
         .sin_family = AF_INET,
-        .sin_port = htons(0x4ea),
-        //.sin_vport = htons(this->port + 1),
+        .sin_port = htons(0xe4a),
+        .sin_vport = htons(this->port + 1),
     };
 
-    //int result = CALL_EXPORT(sceNetBind, this->sendSocket, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
-    //if (result < SCE_NET_ADHOC_MATCHING_OK) {
-    //    CALL_EXPORT(sceNetShutdown, this->sendSocket, 0);
-    //    CALL_EXPORT(sceNetSocketClose, this->sendSocket);
-    //    return result;
-    //}
+    int result = CALL_EXPORT(sceNetBind, this->sendSocket, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
+    if (result < SCE_NET_ADHOC_MATCHING_OK) {
+        CALL_EXPORT(sceNetShutdown, this->sendSocket, 0);
+        CALL_EXPORT(sceNetSocketClose, this->sendSocket);
+        return result;
+    }
 
     const int flag = 1;
-    int result = CALL_EXPORT(sceNetSetsockopt, this->sendSocket, SCE_NET_SOL_SOCKET, SCE_NET_SO_BROADCAST, &flag, sizeof(flag));
+    result = CALL_EXPORT(sceNetSetsockopt, this->sendSocket, SCE_NET_SOL_SOCKET, SCE_NET_SO_BROADCAST, &flag, sizeof(flag));
     if (result < SCE_NET_ADHOC_MATCHING_OK) {
         CALL_EXPORT(sceNetShutdown, this->sendSocket, 0);
         CALL_EXPORT(sceNetSocketClose, this->sendSocket);
@@ -234,7 +235,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
                     this->notifyHandler(&emuenv, id, 2, &target->addr, data_size, target->rawPacket + 0x4);
                 }
             } else {
-                sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, 0, NULL);
+                sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
             }
             break;
         }
@@ -244,7 +245,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             } else {
                 setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 deleteAllTimedFunctions(emuenv, target);
-                sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, 0, NULL);
+                sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
                 this->notifyHandler(&emuenv, id, 5, &target->addr, 0, nullptr);
             }
             break;
@@ -268,13 +269,13 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(emuenv, target);
-            sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, 0, NULL);
+            sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
             this->notifyHandler(&emuenv, id, 9, &target->addr, 0, nullptr);
         }
         break;
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK4:
-    case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5:
+    case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ADDRS:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK7:
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_BYE:
@@ -631,7 +632,7 @@ int SceNetAdhocMatchingContext::broadcastHello(EmuEnvState &emuenv, SceUID threa
         .sin_family = AF_INET,
         .sin_port = htons(0xe4a),
         .sin_addr = htonl(INADDR_BROADCAST),
-        //.sin_vport = htons(0xe4a),
+        .sin_vport = htons(port),
     };
 
     auto result = CALL_EXPORT(sceNetSendto, this->sendSocket, this->helloMsg->serialize().data(), this->totalHelloLength, flags, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));

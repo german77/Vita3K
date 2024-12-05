@@ -128,7 +128,7 @@ static void convertSceSockaddrToPosix(const SceNetSockaddr *src, sockaddr *dst) 
     const SceNetSockaddrIn *src_in = (const SceNetSockaddrIn *)src;
     sockaddr_in *dst_in = (sockaddr_in *)dst;
     dst_in->sin_family = src_in->sin_family;
-    dst_in->sin_port = src_in->sin_port;
+    dst_in->sin_port = src_in->sin_vport;
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
@@ -139,6 +139,7 @@ static void convertPosixSockaddrToSce(sockaddr *src, SceNetSockaddr *dst) {
     SceNetSockaddrIn *dst_in = (SceNetSockaddrIn *)dst;
     sockaddr_in *src_in = (sockaddr_in *)src;
     dst_in->sin_family = static_cast<unsigned char>(src_in->sin_family);
+    dst_in->sin_port = src_in->sin_port;
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
@@ -363,11 +364,13 @@ int PosixSocket::send_packet(const void *msg, unsigned int len, int flags, const
         sockaddr addr;
         convertSceSockaddrToPosix(to, &addr);
         sockaddr_in *inaddr = (sockaddr_in *)&addr;
-        LOG_ERROR("sendto {} {} {} {} {}", sock, (int)msg, len, flags, sizeof(sockaddr_in));
-        //LOG_ERROR("sendtoadd {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr);
+        std::string data = std::string((char*)msg, len);
+        LOG_ERROR("sendto {} {} {} {} {}", sock, data, len, flags, sizeof(sockaddr_in));
+        LOG_ERROR("sendtoadd {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr);
         return translate_return_value(sendto(sock, (const char *)msg, len, flags, &addr, sizeof(sockaddr_in)));
     } else {
-        LOG_ERROR("sendto {} {} {} {}",sock,(int)msg,len,flags);
+        std::string data = std::string((char *)msg, len);
+        LOG_ERROR("sendto {} {} {} {}",sock,data,len,flags);
         return translate_return_value(send(sock, (const char *)msg, len, flags));
     }
 }

@@ -90,7 +90,7 @@ EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *target
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
         ctx->deleteAllTimedFunctions(emuenv, foundTarget);
-        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, optLen, opt);
+        ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, optLen, opt);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         if (foundTarget->optLength > 0) {
             delete foundTarget->opt;
