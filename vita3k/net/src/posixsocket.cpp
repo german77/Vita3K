@@ -351,8 +351,19 @@ int PosixSocket::recv_packet(void *buf, unsigned int len, int flags, SceNetSocka
     if (from != nullptr) {
         sockaddr addr;
         int res = recvfrom(sock, (char *)buf, len, flags, &addr, (socklen_t *)fromlen);
-        *fromlen = sizeof(SceNetSockaddrIn);
 
+        if (*fromlen > sizeof(SceNetSockaddr)) {
+            LOG_ERROR("Addr length not supported");
+            *fromlen = 0;
+            return translate_return_value(res);
+        }
+
+        std::string data = std::string((char *)buf, res);
+        sockaddr_in *inaddr = (sockaddr_in *)&addr;
+        LOG_DEBUG("recvfrom {} {} {} {} {}", sock, len, flags, data, res);
+        LOG_DEBUG("recvfromadd {} {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr, *fromlen);
+
+        memcpy(from,&addr, *fromlen);
         return translate_return_value(res);
     } else {
         return translate_return_value(recv(sock, (char *)buf, len, flags));
