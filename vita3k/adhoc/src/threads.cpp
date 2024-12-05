@@ -50,8 +50,29 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
             target->rawPacketLength = 0;
             break;
         }
-        case SCE_NET_ADHOC_MATCHING_EVENT_UNK2: { // idk
-            // TODO
+        case SCE_NET_ADHOC_MATCHING_EVENT_UNK2: {
+            target->pipeMsg88.flags &= ~1U;
+            if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2) {
+                if (target->retryCount-- > 0) {
+                    ctx->sendOptDataToTarget(*emuenv,thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
+                    ctx->add88TimedFunct(*emuenv, target);
+                } else {
+                    ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void *)0x0);
+                }
+            }
+            if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
+                target->retryCount++;
+                if (target->retryCount < 1) {
+                    ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void *)0x0);
+                } else {
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
+                    ctx->add88TimedFunct(*emuenv, target);
+                }
+            }
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_UNK3: { // idk
@@ -62,7 +83,7 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
             target->uuid2++;
             if (target->uuid2 < 1) {
                 ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
-                ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK5, 0, nullptr);
+                ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
                 ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, nullptr);
             } else {
                 if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
