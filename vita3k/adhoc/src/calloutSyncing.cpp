@@ -65,7 +65,7 @@ int SceNetAdhocMatchingCalloutSyncing::addTimedFunction(SceNetAdhocMatchingCallo
         return SCE_NET_CALLOUT_ERROR_NOT_INITIALIZED;
     }
 
-    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+    uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
     calloutFunction->function = function;
     calloutFunction->args = args;
     calloutFunction->execAt = now + interval;
