@@ -147,7 +147,9 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
 
                 // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
                 std::string data = std::string(ctx->rxbuf, res);
-                LOG_INFO("SOME INPUT: {}", data);
+                uint8_t addr[4];
+                memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
+                LOG_INFO("New input from {}.{}.{}.{}: {}", addr[0], addr[1], addr[2], addr[3], data);
             } while (fromAddr.sin_addr.s_addr == ctx->ownAddress || *ctx->rxbuf != 1);
             // we have a packet :D, but may be unfinished, check how long it is and see if we can get the remaining
 
