@@ -157,7 +157,7 @@ int adhocMatchingInputThread(EmuEnvState* emuenvn, SceUID thread_id, int id) {
             uint8_t addr[4];
             memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
             std::string data = std::string(ctx->rxbuf, res);
-            LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], fromAddr.sin_port, data);
+            LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
 
             SceUShort16 nPacketLength; // network byte order of packet length
             memcpy(&nPacketLength, ctx->rxbuf + 2, 2);

@@ -128,7 +128,7 @@ static void convertSceSockaddrToPosix(const SceNetSockaddr *src, sockaddr *dst) 
     const SceNetSockaddrIn *src_in = (const SceNetSockaddrIn *)src;
     sockaddr_in *dst_in = (sockaddr_in *)dst;
     dst_in->sin_family = src_in->sin_family;
-    dst_in->sin_port = src_in->sin_port;
+    dst_in->sin_port = src_in->sin_port+src_in->sin_vport;
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
@@ -143,6 +143,15 @@ static void convertPosixSockaddrToSce(sockaddr *src, SceNetSockaddr *dst) {
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
+static void convertSceFlagsToPosix(const int flags, int* outFlags) {
+    if (outFlags == nullptr)
+        return;
+    *outFlags = 0;
+    if ((flags & 0x400) != 0) {
+        *outFlags |= MSG_DONTROUTE;
+    }
+}
+
 int PosixSocket::connect(const SceNetSockaddr *addr, unsigned int namelen) {
     sockaddr addr2;
     convertSceSockaddrToPosix(addr, &addr2);
@@ -152,9 +161,11 @@ int PosixSocket::connect(const SceNetSockaddr *addr, unsigned int namelen) {
 int PosixSocket::bind(const SceNetSockaddr *addr, unsigned int addrlen) {
     sockaddr addr2;
     convertSceSockaddrToPosix(addr, &addr2);
-    sockaddr_in *inaddr = (sockaddr_in *)addr;
+    sockaddr_in *inaddr = (sockaddr_in *)&addr2;
+    uint8_t addrr[4];
+    memcpy(addrr, &inaddr->sin_addr, 4);
     LOG_ERROR("bind {} {}", sock, sizeof(sockaddr_in));
-    LOG_ERROR("bindadd {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr);
+    LOG_ERROR("bindadd {} {}.{}.{}.{}:{}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port));
     return translate_return_value(::bind(sock, &addr2, sizeof(sockaddr_in)));
 }
 
@@ -349,34 +360,44 @@ int PosixSocket::get_socket_options(int level, int optname, void *optval, unsign
 }
 
 int PosixSocket::recv_packet(void *buf, unsigned int len, int flags, SceNetSockaddr *from, unsigned int *fromlen) {
+    int posix_flags;
+    convertSceFlagsToPosix(flags, &posix_flags);
     if (from != nullptr) {
         sockaddr addr;
-        int res = recvfrom(sock, (char *)buf, len, flags, &addr, (socklen_t *)fromlen);
+        int res = recvfrom(sock, (char *)buf, len, posix_flags, &addr, (socklen_t *)fromlen);
         convertPosixSockaddrToSce(&addr, from);
 
         std::string data = std::string((char *)buf, res);
         sockaddr_in *inaddr = (sockaddr_in *)&addr;
-        LOG_DEBUG("recvfrom {} {} {} {} {}", sock, len, flags, data, res);
-        LOG_DEBUG("recvfromadd {} {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr, *fromlen);
+
+        uint8_t addrr[4];
+        memcpy(addrr, &inaddr->sin_addr, 4);
+        //LOG_DEBUG("recvfrom {} {} {} {} {}", sock, len, flags, data, res);
+        LOG_DEBUG("recvfromadd {} {}.{}.{}.{}:{} {}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), *fromlen);
 
         return translate_return_value(res);
     } else {
-        return translate_return_value(recv(sock, (char *)buf, len, flags));
+        return translate_return_value(recv(sock, (char *)buf, len, posix_flags));
     }
 }
 
 int PosixSocket::send_packet(const void *msg, unsigned int len, int flags, const SceNetSockaddr *to, unsigned int tolen) {
+    int posix_flags;
+    convertSceFlagsToPosix(flags, &posix_flags);
     if (to != nullptr) {
         sockaddr addr;
         convertSceSockaddrToPosix(to, &addr);
+        int result = translate_return_value(sendto(sock, (const char *)msg, len, posix_flags, &addr, sizeof(sockaddr_in)));
         sockaddr_in *inaddr = (sockaddr_in *)&addr;
-        std::string data = std::string((char*)msg, len);
-        LOG_ERROR("sendto {} {} {} {} {}", sock, data, len, flags, sizeof(sockaddr_in));
-        LOG_ERROR("sendtoadd {} {} {}", inaddr->sin_family, inaddr->sin_port, inaddr->sin_addr.S_un.S_addr);
-        return translate_return_value(sendto(sock, (const char *)msg, len, flags, &addr, sizeof(sockaddr_in)));
+        std::string data = std::string((char *)msg, len);
+        uint8_t addrr[4];
+        memcpy(addrr, &inaddr->sin_addr, 4);
+        LOG_ERROR("sendto {} {} {} {} {} {}", sock, data, len, flags, sizeof(sockaddr_in), result);
+        LOG_ERROR("sendtoadd {} {}.{}.{}.{}:{}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port));
+        return result;
     } else {
         std::string data = std::string((char *)msg, len);
         LOG_ERROR("sendto {} {} {} {}",sock,data,len,flags);
-        return translate_return_value(send(sock, (const char *)msg, len, flags));
+        return translate_return_value(send(sock, (const char *)msg, len, posix_flags));
     }
 }
