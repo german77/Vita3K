@@ -27,6 +27,7 @@
 #include <vector>
 #include <net/state.h>
 
+#define SCE_NET_ADHOC_DEFAULT_PORT 0xe4a
 #define SCE_NET_ADHOC_MATCHING_MAXNUM 16
 #define SCE_NET_ADHOC_MATCHING_MAXOPTLEN 9196
 #define SCE_NET_ADHOC_MATCHING_MAXDATALEN 9204
@@ -390,7 +391,7 @@ struct SceNetAdhocMatchingContext {
     SceNetAdhocMatchingCalloutFunction helloTimedFunction;
 
     uint32_t ownAddress;
-
+    uint16_t ownPort;
 };
 
 class AdhocState {

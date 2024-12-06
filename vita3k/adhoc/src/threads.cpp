@@ -54,12 +54,13 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
             target->pipeMsg88.flags &= ~1U;
             if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2) {
                 if (target->retryCount-- > 0) {
-                    ctx->sendOptDataToTarget(*emuenv,thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
+                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
                     ctx->add88TimedFunct(*emuenv, target);
-                } else {
+                }
+                else {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void *)0x0);
+                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void*)0x0);
                 }
             }
             if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
@@ -67,8 +68,9 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
                 if (target->retryCount < 1) {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void *)0x0);
-                } else {
+                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void*)0x0);
+                }
+                else {
                     ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
                     ctx->add88TimedFunct(*emuenv, target);
                 }
@@ -85,7 +87,8 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
                 ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
                 ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, nullptr);
-            } else {
+            }
+            else {
                 if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
                     ctx->sendMemberListToTarget(target);
                 }
@@ -126,9 +129,9 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
     return 0;
 };
 
-int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
+int adhocMatchingInputThread(EmuEnvState* emuenvn, SceUID thread_id, int id) {
     tracy::SetThreadName("adhocMatchingInputThread");
-    auto &emuenv = *emuenvn;
+    auto& emuenv = *emuenvn;
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
 
     SceNetSockaddrIn fromAddr{};
@@ -140,30 +143,33 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
         SceUShort16 packetLength{};
         do {
             do {
-                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)&fromAddr, &fromAddrLen);
+                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr*)&fromAddr, &fromAddrLen);
                 if (res < SCE_NET_ADHOC_MATCHING_OK) {
                     return 0; // exit the thread immediatly
                 }
+            } while (*ctx->rxbuf != 1);
 
-                // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
-                std::string data = std::string(ctx->rxbuf, res);
-                uint8_t addr[4];
-                memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
-                LOG_INFO("New input from {}.{}.{}.{}: {}", addr[0], addr[1], addr[2], addr[3], data);
-            } while (fromAddr.sin_addr.s_addr == ctx->ownAddress || *ctx->rxbuf != 1);
-            // we have a packet :D, but may be unfinished, check how long it is and see if we can get the remaining
+            // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
+            if(fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort){
+                continue;
+            }
+
+            uint8_t addr[4];
+            memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
+            std::string data = std::string(ctx->rxbuf, res);
+            LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], fromAddr.sin_port, data);
 
             SceUShort16 nPacketLength; // network byte order of packet length
             memcpy(&nPacketLength, ctx->rxbuf + 2, 2);
-            SceUShort16 packetLenght = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
+            packetLength = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
         } while (res < packetLength + 4);
         // We received the whole packet, we can now commence the parsing and the fun
         std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
         auto target = ctx->findTargetByAddr(fromAddr.sin_addr.s_addr);
 
-
+        
+        // No target found try to create one
         if (target == nullptr) {
-            // No target found try to create one
             SceNetAdhocMatchingPacketType type = *(SceNetAdhocMatchingPacketType *)(ctx->rxbuf + 1);
             if (type == SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK && (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP)) {
                 target = ctx->newTarget(fromAddr.sin_addr.s_addr);
@@ -173,8 +179,8 @@ int adhocMatchingInputThread(EmuEnvState *emuenvn, SceUID thread_id, int id) {
             }
         }
 
+        // No target available
         if (target == nullptr) {
-            // No target available
             continue;
         }
 
