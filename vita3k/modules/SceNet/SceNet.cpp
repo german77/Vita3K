@@ -126,6 +126,7 @@ EXPORT(int, sceNetAccept, int sid, SceNetSockaddr *addr, unsigned int *addrlen) 
 
 EXPORT(int, sceNetBind, int sid, const SceNetSockaddr *addr, unsigned int addrlen) {
     TRACY_FUNC(sceNetBind, sid, addr, addrlen);
+
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -447,6 +448,7 @@ EXPORT(int, sceNetRecvfrom, int sid, void *buf, unsigned int len, int flags, Sce
     }
 
     const int ret = sock->recv_packet(buf, len, flags, from, fromlen);
+
     return ret;
 }
 
