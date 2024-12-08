@@ -49,6 +49,7 @@ struct Socket {
 
     virtual ~Socket() = default;
 
+    virtual int shutdown_socket(int how) = 0;
     virtual int close() = 0;
     virtual int bind(const SceNetSockaddr *addr, unsigned int addrlen) = 0;
     virtual int send_packet(const void *msg, unsigned int len, int flags, const SceNetSockaddr *to, unsigned int tolen) = 0;
@@ -83,6 +84,7 @@ struct PosixSocket : public Socket {
         : Socket(0, 0, 0)
         , sock(sock) {}
 
+    int shutdown_socket(int how) override;
     int close() override;
     int bind(const SceNetSockaddr *addr, unsigned int addrlen) override;
     int send_packet(const void *msg, unsigned int len, int flags, const SceNetSockaddr *to, unsigned int tolen) override;
