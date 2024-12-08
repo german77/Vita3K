@@ -33,7 +33,7 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
     SceNetAdhocMatchingPipeMessage pipeMessage;
     while (read(ctx->msgPipeUid[0], &pipeMessage, sizeof(pipeMessage)) >= 0) {
         ZoneScopedC(0xFFC2C6);
-        std::lock_guard<std::mutex> guard(emuenv->adhoc.getMutex());
+        std::lock_guard<std::recursive_mutex> guard(emuenv->adhoc.getMutex());
         
         int type = pipeMessage.type;
         auto target = pipeMessage.peer;
@@ -164,7 +164,7 @@ int adhocMatchingInputThread(EmuEnvState* emuenvn, SceUID thread_id, int id) {
             packetLength = ntohs(nPacketLength); // ACTUALLY the packet length fr this time
         } while (res < packetLength + 4);
         // We received the whole packet, we can now commence the parsing and the fun
-        std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+        std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
         auto target = ctx->findTargetByAddr(fromAddr.sin_addr.s_addr);
 
         

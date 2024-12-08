@@ -398,7 +398,7 @@ class AdhocState {
 public:
     int initializeMutex();
     int deleteMutex();
-    std::mutex &getMutex();
+    std::recursive_mutex &getMutex();
 
     int createMSpace(SceSize poolsize, void *poolptr);
     int deleteMSpace();
@@ -418,7 +418,7 @@ public: // Globals
 private:
     bool is_mutex_initialized = false;
 
-    std::mutex mutex;
+    std::recursive_mutex mutex;
     SceNetAdhocMatchingContext *contextList = NULL;
     SceUID matchingCtxCount = 1;
 };

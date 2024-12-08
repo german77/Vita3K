@@ -554,9 +554,13 @@ EXPORT(int, sceNetShowRoute) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceNetShutdown, int eid, int how) {
-    TRACY_FUNC(sceNetShutdown, eid, how);
-    return UNIMPLEMENTED();
+EXPORT(int, sceNetShutdown, int sid, int how) {
+    TRACY_FUNC(sceNetShutdown, sid, how);
+    auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
+    if (!sock) {
+        return RET_ERROR(SCE_NET_EBADF);
+    }
+    return sock->shutdown_socket(how);
 }
 
 EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, SceNetProtocol protocol) {
@@ -585,12 +589,18 @@ EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, S
     SocketPtr sock = std::make_shared<PosixSocket>(domain, hostSockType, protocol);
     auto id = ++emuenv.net.next_id;
     emuenv.net.socks.emplace(id, sock);
+    DWORD timeout = 1 * 1000;
+    sock->set_socket_options(SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     return id;
 }
 
-EXPORT(int, sceNetSocketAbort) {
-    TRACY_FUNC(sceNetSocketAbort);
-    return UNIMPLEMENTED();
+EXPORT(int, sceNetSocketAbort, int sid) {
+    TRACY_FUNC(sceNetSocketAbort, sid);
+    auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
+    if (!sock) {
+        return RET_ERROR(SCE_NET_EBADF);
+    }
+    return sock->shutdown_socket(2);
 }
 
 EXPORT(int, sceNetSocketClose, int sid) {
@@ -598,6 +608,10 @@ EXPORT(int, sceNetSocketClose, int sid) {
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
+    }
+    int result = sock->close();
+    if (result > 0) {
+        emuenv.net.socks.erase(sid);
     }
     return sock->close();
 }

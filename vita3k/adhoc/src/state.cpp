@@ -37,7 +37,7 @@ int AdhocState::deleteMutex() {
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-std::mutex &AdhocState::getMutex() {
+std::recursive_mutex &AdhocState::getMutex() {
     ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     return mutex;
 }
@@ -162,7 +162,7 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
         break;
     }
 
-    delete ctx;
+    //delete context;
 };
 
 void AdhocState::deleteAllMatchingContext() {
