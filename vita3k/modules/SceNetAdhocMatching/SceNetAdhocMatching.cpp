@@ -19,6 +19,8 @@
 #include <module/module.h>
 
 #include <adhoc/state.h>
+#include <kernel/state.h>
+#include <util/lock_and_find.h>
 
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
@@ -168,7 +170,8 @@ EXPORT(int, sceNetAdhocMatchingCreate, SceNetAdhocMatchingMode mode, int maxnum,
     ctx->targetList = nullptr;
 
     SceNetAdhocMatchingHandler handler{
-        .entry = handlerAddr,
+        .pc = handlerAddr.address(),
+        .thread = thread_id,
     };
 
     ctx->handler = handler;

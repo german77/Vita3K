@@ -151,8 +151,8 @@ enum SceNetAdhocMatchingContextStatus {
 };
 
 struct SceNetAdhocMatchingHandler {
-    Ptr<void> entry;
-    ThreadStatePtr thread;
+    Address pc;
+    SceUID thread;
 };
 
 struct SceNetAdhocMatchingDataMessage {
@@ -343,7 +343,7 @@ struct SceNetAdhocMatchingContext {
     void deleteA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
     void deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
 
-    void notifyHandler(EmuEnvState *emuenv, int context_id, int type, SceNetInAddr *peer, int optLen, void *opt);
+    void notifyHandler(EmuEnvState *emuenv, int context_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt);
 
     int sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data);
     int sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt);
@@ -352,7 +352,7 @@ struct SceNetAdhocMatchingContext {
 
 
     SceNetAdhocMatchingContext *next = nullptr;
-    int id;
+    unsigned int id;
     SceNetAdhocMatchingContextStatus status = SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING;
     SceNetAdhocMatchingMode mode;
     int maxnum;
