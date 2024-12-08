@@ -187,6 +187,11 @@ int PosixSocket::get_socket_address(SceNetSockaddr *name, unsigned int *namelen)
     return res;
 }
 
+int PosixSocket::shutdown_socket(int how) {
+    auto out = shutdown(sock, how);
+    return translate_return_value(out);
+}
+
 int PosixSocket::close() {
 #ifdef _WIN32
     auto out = closesocket(sock);
@@ -372,8 +377,8 @@ int PosixSocket::recv_packet(void *buf, unsigned int len, int flags, SceNetSocka
 
         uint8_t addrr[4];
         memcpy(addrr, &inaddr->sin_addr, 4);
-        LOG_DEBUG("recvfrom {} {} {} {} {}", sock, len, flags, data, res);
-        LOG_DEBUG("recvfromadd {} {}.{}.{}.{}:{} {}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), *fromlen);
+        LOG_INFO("recvfrom {} {} {} {} {}", sock, len, flags, data, res);
+        LOG_INFO("recvfromadd {} {}.{}.{}.{}:{} {}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), *fromlen);
 
         return translate_return_value(res);
     } else {
