@@ -656,7 +656,7 @@ void SceNetAdhocMatchingContext::resetHelloOpt() {
 
 void SceNetAdhocMatchingContext::addHelloTimedFunct(EmuEnvState &emuenv, uint64_t time_interval) {
     ZoneScopedC(0xF6C2FF);
-    //std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    //std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
     if (shouldHelloReqBeProcessed) {
         calloutSyncing.deleteTimedFunction(&helloTimedFunction, nullptr);
         shouldHelloReqBeProcessed = false;
@@ -667,7 +667,7 @@ void SceNetAdhocMatchingContext::addHelloTimedFunct(EmuEnvState &emuenv, uint64_
 
 void SceNetAdhocMatchingContext::addA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target) {
     ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
     if (target->is_a0_pending) {
         calloutSyncing.deleteTimedFunction(&target->timedFunctionA0, nullptr);
         target->is_a0_pending = false;
@@ -678,7 +678,7 @@ void SceNetAdhocMatchingContext::addA0TimedFunction(EmuEnvState &emuenv, SceNetA
 
 void SceNetAdhocMatchingContext::add88TimedFunct(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target) {
     ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
     if (target->is_88_pending) {
         calloutSyncing.deleteTimedFunction(&target->timedFunction88, nullptr);
         target->is_88_pending = false;
@@ -694,7 +694,7 @@ void SceNetAdhocMatchingContext::add88TimedFunctionWithParentInterval(EmuEnvStat
         interval = target->keepAliveInterval;
     }
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
     if (target->is_88_pending) {
         calloutSyncing.deleteTimedFunction(&target->timedFunction88, nullptr);
         target->is_88_pending = false;
@@ -705,7 +705,7 @@ void SceNetAdhocMatchingContext::add88TimedFunctionWithParentInterval(EmuEnvStat
 
 void SceNetAdhocMatchingContext::deleteHelloTimedFunction(EmuEnvState &emuenv) {
     ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
     if (!shouldHelloReqBeProcessed)
         return;
 
@@ -715,7 +715,7 @@ void SceNetAdhocMatchingContext::deleteHelloTimedFunction(EmuEnvState &emuenv) {
 
 void SceNetAdhocMatchingContext::deleteA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target) {
     ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
     if (target->is_a0_pending) {
         calloutSyncing.deleteTimedFunction(&target->timedFunctionA0, nullptr);
         target->is_a0_pending = false;
@@ -724,7 +724,7 @@ void SceNetAdhocMatchingContext::deleteA0TimedFunction(EmuEnvState &emuenv, SceN
 
 void SceNetAdhocMatchingContext::deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target) {
     ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+    std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
     if (target->is_a0_pending) {
         calloutSyncing.deleteTimedFunction(&target->timedFunctionA0, nullptr);
         target->is_a0_pending = false;
