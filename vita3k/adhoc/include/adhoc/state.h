@@ -36,8 +36,8 @@
 DECL_EXPORT(SceInt32, sceNetCtlAdhocGetInAddr, SceNetInAddr *inaddr);
 
 int sendHelloReqToPipe(void *arg);
-int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id);
-int adhocMatchingInputThread(EmuEnvState *emuenv, SceUID thread_id, int id);
+int adhocMatchingEventThread(EmuEnvState *emuenv, int id);
+int adhocMatchingInputThread(EmuEnvState *emuenv, int id);
 int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id);
 
 int pipe88CallbackType2(void *args);
@@ -152,7 +152,6 @@ enum SceNetAdhocMatchingContextStatus {
 
 struct SceNetAdhocMatchingHandler {
     Address pc;
-    SceUID thread;
 };
 
 struct SceNetAdhocMatchingDataMessage {
@@ -343,7 +342,7 @@ struct SceNetAdhocMatchingContext {
     void deleteA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
     void deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
 
-    void notifyHandler(EmuEnvState *emuenv, int context_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt);
+    void notifyHandler(EmuEnvState *emuenv, SceUID thread_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt);
 
     int sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data);
     int sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt);
