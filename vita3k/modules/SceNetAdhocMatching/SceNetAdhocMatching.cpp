@@ -169,12 +169,7 @@ EXPORT(int, sceNetAdhocMatchingCreate, SceNetAdhocMatchingMode mode, int maxnum,
     ctx->helloOptionFlag = 1;
     ctx->targetList = nullptr;
 
-    SceNetAdhocMatchingHandler handler{
-        .pc = handlerAddr.address(),
-        .thread = thread_id,
-    };
-
-    ctx->handler = handler;
+    ctx->handler.pc = handlerAddr.address();
 
     return ctx->id;
 }

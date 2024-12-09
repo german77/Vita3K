@@ -16,6 +16,7 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include "module/module.h"
+#include <kernel/state.h>
 
 #include <adhoc/state.h>
 #include <net/types.h>
@@ -26,9 +27,11 @@
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
 
-int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
+int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
     tracy::SetThreadName("adhocMatchingEventThread");
     auto ctx = emuenv->adhoc.findMatchingContextById(id);
+    const ThreadStatePtr event_thread = emuenv->kernel.create_thread(emuenv->mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+    SceUID thread_id = event_thread->id;
 
     SceNetAdhocMatchingPipeMessage pipeMessage;
     while (read(ctx->msgPipeUid[0], &pipeMessage, sizeof(pipeMessage)) >= 0) {
@@ -60,7 +63,7 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
                 else {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void*)0x0);
+                    ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
                 }
             }
             if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
@@ -68,7 +71,7 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
                 if (target->retryCount < 1) {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, (void*)0x0);
+                    ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
                 }
                 else {
                     ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
@@ -86,7 +89,7 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
             if (target->uuid2 < 1) {
                 ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                ctx->notifyHandler(emuenv, ctx->id, 8, &target->addr, 0, nullptr);
+                ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
             }
             else {
                 if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
@@ -115,7 +118,7 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
             target->context_uuid++;
             if (target->context_uuid < 1) {
                 ctx->setTargetSendDataStatus(target, 1);
-                ctx->notifyHandler(emuenv, ctx->id, 0xd, &target->addr, 0, nullptr);
+                ctx->notifyHandler(emuenv, thread_id, 0xd, &target->addr, 0, nullptr);
             }
             break;
         }
@@ -126,13 +129,16 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, SceUID thread_id, int id) {
         }
     }
 
+    event_thread->exit(0);
     return 0;
 };
 
-int adhocMatchingInputThread(EmuEnvState* emuenvn, SceUID thread_id, int id) {
+int adhocMatchingInputThread(EmuEnvState* emuenvn, int id) {
     tracy::SetThreadName("adhocMatchingInputThread");
     auto& emuenv = *emuenvn;
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
+    const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+    SceUID thread_id = input_thread->id;
 
     SceNetSockaddrIn fromAddr{};
     unsigned int fromAddrLen = sizeof(SceNetSockaddrIn);
@@ -145,6 +151,7 @@ int adhocMatchingInputThread(EmuEnvState* emuenvn, SceUID thread_id, int id) {
             do {
                 res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr*)&fromAddr, &fromAddrLen);
                 if (res < SCE_NET_ADHOC_MATCHING_OK) {
+                    input_thread->exit(0);
                     return 0; // exit the thread immediatly
                 }
             } while (*ctx->rxbuf != 1);
@@ -202,7 +209,7 @@ int adhocMatchingInputThread(EmuEnvState* emuenvn, SceUID thread_id, int id) {
             write(ctx->msgPipeUid[1], &target->pipeMsg28, sizeof(target->pipeMsg28));
         }
     }
-
+    input_thread->exit(0);
     return 0;
 };
 
