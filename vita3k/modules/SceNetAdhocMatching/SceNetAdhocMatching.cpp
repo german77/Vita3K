@@ -194,7 +194,7 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
     // These 3 may take time because they wait for both threads to end
     ctx->calloutSyncing.closeCalloutThread();
     ctx->closeInputThread(emuenv, thread_id);
-   // ctx->closeEventHandler();
+    ctx->closeEventHandler();
 
     if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP) {
         ctx->deleteHelloTimedFunction(emuenv);
@@ -329,10 +329,9 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
         ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, foundTarget->optLength, foundTarget->opt);
         ctx->add88TimedFunct(emuenv, foundTarget);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
+        foundTarget->retryCount = ctx->retryCount;
         break;
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2:
-        if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT)
-            return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_TARGET_NOT_READY);
         if (membersCount + 1 >= ctx->maxnum)
             return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_EXCEED_MAXNUM);
         if (foundTarget->optLength > 0) {

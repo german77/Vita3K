@@ -406,7 +406,7 @@ int PosixSocket::send_packet(const void *msg, unsigned int len, int flags, const
     } else {
         if (len > 0) {
             std::string data = std::string((char *)msg, len);
-            //LOG_ERROR("sendto {} {} {} {}", sock, data, len, flags);
+            LOG_ERROR("sendto {} {} {} {}", sock, data, len, flags);
         }
         return translate_return_value(send(sock, (const char *)msg, len, posix_flags));
     }

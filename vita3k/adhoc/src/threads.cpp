@@ -18,11 +18,11 @@
 #include "module/module.h"
 #include <kernel/state.h>
 
-#include <adhoc/state.h>
-#include <net/types.h>
 #include "../SceNet/SceNet.h"
+#include <adhoc/state.h>
 #include <chrono>
 #include <mutex>
+#include <net/types.h>
 
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
@@ -36,16 +36,18 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
     while (read(ctx->msgPipeUid[0], &pipeMessage, sizeof(pipeMessage)) >= 0) {
         ZoneScopedC(0xFFC2C6);
         std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
-        
+
         int type = pipeMessage.type;
         auto target = pipeMessage.peer;
-        pipeMessage.flags &= ~1U; // get rid of last bit
+        pipeMessage.flags &= 0xfffffffe; // get rid of last bit
 
-        LOG_INFO("event: {}",type);
+        LOG_INFO("event: {}", type);
         switch (type) {
+        case SCE_NET_ADHOC_MATCHING_EVENT_ABORT:
+            return 0;
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET: { // Packet received
-            target->pipeMsg88.flags &= ~1U;
-            ctx->processPacketFromTarget(emuenv,thread_id, target);
+            target->pipeMsg28.flags &= 0xfffffffe;
+            ctx->processPacketFromTarget(emuenv, thread_id, target);
             if (target->rawPacket)
                 delete target->rawPacket;
             target->rawPacket = 0;
@@ -55,14 +57,16 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
         case SCE_NET_ADHOC_MATCHING_EVENT_UNK2: {
             target->pipeMsg88.flags &= ~1U;
             if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2) {
-                if (target->retryCount-- > 0) {
+                if (target->retryCount > 0) {
+                    target->retryCount--;
+                }
+                if (target->unk_50 || target->retryCount > 0) {
                     ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
                     ctx->add88TimedFunct(emuenv, target);
-                }
-                else {
+                } else {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
+                    ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr, 0, nullptr);
                 }
             }
             if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
@@ -70,27 +74,25 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
                 if (target->retryCount < 1) {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
-                }
-                else {
+                    ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr, 0, nullptr);
+                } else {
                     ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
                     ctx->add88TimedFunct(emuenv, target);
                 }
             }
             break;
         }
-        case SCE_NET_ADHOC_MATCHING_EVENT_UNK3: { // idk
+        case SCE_NET_ADHOC_MATCHING_EVENT_UNK3: {
             target->pipeMsg88.flags = (target->pipeMsg88).flags & 0xfffffffe;
             if (target->status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED) {
                 break;
             }
-            target->uuid2++;
-            if (target->uuid2 < 1) {
+            target->retryCount2++;
+            if (target->retryCount2 < 1) {
                 ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
-            }
-            else {
+                ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr, 0, nullptr);
+            } else {
                 if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
                     ctx->sendMemberListToTarget(target);
                 }
@@ -117,13 +119,13 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
             target->context_uuid++;
             if (target->context_uuid < 1) {
                 ctx->setTargetSendDataStatus(target, 1);
-                ctx->notifyHandler(emuenv, thread_id, 0xd, &target->addr, 0, nullptr);
+                ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_TIMEOUT, &target->addr, 0, nullptr);
             }
             break;
         }
         }
 
-        if (target != nullptr && target->unk_54 == 1 && (target->pipeMsg28.flags & 1) == 0 && (target->pipeMsg88.flags & 1) == 0) {
+        if (target != nullptr && target->delete_target && (target->pipeMsg28.flags & 1) == 0 && (target->pipeMsg88.flags & 1) == 0) {
             ctx->deleteTarget(target);
         }
     }
@@ -134,7 +136,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
 int adhocMatchingInputThread(EmuEnvState &emuenv, int id) {
     tracy::SetThreadName("adhocMatchingInputThread");
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
-   SceUID thread_id = ctx->input_thread_id;
+    SceUID thread_id = ctx->input_thread_id;
 
     SceNetSockaddrIn fromAddr{};
     unsigned int fromAddrLen = sizeof(SceNetSockaddrIn);
@@ -145,7 +147,7 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, int id) {
         SceUShort16 packetLength{};
         do {
             do {
-                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr*)&fromAddr, &fromAddrLen);
+                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)&fromAddr, &fromAddrLen);
                 if (res < SCE_NET_ADHOC_MATCHING_OK) {
                     return 0; // exit the thread immediatly
                 }
@@ -154,8 +156,8 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, int id) {
             uint8_t addr[4];
             memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
             // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
-            if(fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort){
-                //continue;
+            if (fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort) {
+                // continue;
             }
 
             std::string data = std::string(ctx->rxbuf, res);
@@ -169,7 +171,6 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, int id) {
         std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
         auto target = ctx->findTargetByAddr(fromAddr.sin_addr.s_addr);
 
-        
         // No target found try to create one
         if (target == nullptr) {
             SceNetAdhocMatchingPacketType type = *(SceNetAdhocMatchingPacketType *)(ctx->rxbuf + 1);
@@ -238,7 +239,7 @@ int adhocMatchingCalloutThread(EmuEnvState &emuenv, int id) {
         }
 
         ctx->calloutSyncing.mutex.unlock();
-       
+
         // Limit sleep time to something reasonable
         if (sleep_time <= 0) {
             sleep_time = 1;
@@ -250,8 +251,6 @@ int adhocMatchingCalloutThread(EmuEnvState &emuenv, int id) {
         // TODO use ctx->calloutSyncing.condvar to break from this sleep early
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
     } while (ctx->calloutSyncing.shouldExit == false);
-
-    LOG_CRITICAL("calloutShouldExit:{}", ctx->calloutSyncing.shouldExit);
 
     return 0;
 };
