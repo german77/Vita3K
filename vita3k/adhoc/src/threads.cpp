@@ -43,6 +43,8 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
 
         LOG_INFO("event: {}",type);
         switch (type) {
+        case SCE_NET_ADHOC_MATCHING_EVENT_ABORT:
+            return 0;
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET: { // Packet received
             target->pipeMsg88.flags &= ~1U;
             ctx->processPacketFromTarget(emuenv,thread_id, target);
@@ -155,11 +157,11 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, int id) {
             memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
             // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
             if(fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort){
-                //continue;
+                continue;
             }
 
             std::string data = std::string(ctx->rxbuf, res);
-            LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
+            //LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
 
             SceUShort16 nPacketLength; // network byte order of packet length
             memcpy(&nPacketLength, ctx->rxbuf + 2, 2);
@@ -250,8 +252,6 @@ int adhocMatchingCalloutThread(EmuEnvState &emuenv, int id) {
         // TODO use ctx->calloutSyncing.condvar to break from this sleep early
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
     } while (ctx->calloutSyncing.shouldExit == false);
-
-    LOG_CRITICAL("calloutShouldExit:{}", ctx->calloutSyncing.shouldExit);
 
     return 0;
 };

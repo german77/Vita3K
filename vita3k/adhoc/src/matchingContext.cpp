@@ -101,7 +101,7 @@ int SceNetAdhocMatchingContext::initializeSendSocket(EmuEnvState &emuenv, SceUID
     this->sendSocket = socket_uid;
 
     int result = SCE_NET_ADHOC_MATCHING_OK;
-    int portOffset = 1;
+    int portOffset = this->mode==SCE_NET_ADHOC_MATCHING_MODE_PARENT?1:2;
     do {
         SceNetSockaddrIn addr = {
             .sin_len = sizeof(SceNetSockaddrIn),
@@ -112,7 +112,7 @@ int SceNetAdhocMatchingContext::initializeSendSocket(EmuEnvState &emuenv, SceUID
         this->ownPort = htons(SCE_NET_ADHOC_DEFAULT_PORT) +htons(this->port + portOffset);
         int result = CALL_EXPORT(sceNetBind, this->sendSocket, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
         portOffset++;
-    } while (result == SCE_NET_ERROR_EADDRINUSE);
+    } while (result == SCE_NET_ERROR_EADDRINUSE && portOffset < 20);
 
     if (result < SCE_NET_ADHOC_MATCHING_OK) {
         CALL_EXPORT(sceNetShutdown, this->sendSocket, 0);
@@ -148,6 +148,10 @@ int SceNetAdhocMatchingContext::initializeEventHandler(EmuEnvState &emuenv, SceU
 
 void SceNetAdhocMatchingContext::closeEventHandler() {
     ZoneScopedC(0xF6C2FF);
+    SceNetAdhocMatchingPipeMessage abortMsg {
+        .type = SCE_NET_ADHOC_MATCHING_EVENT_ABORT,
+    };
+    write(this->msgPipeUid[1], &abortMsg, sizeof(SceNetAdhocMatchingPipeMessage));
 
     close(this->msgPipeUid[0]);
     close(this->msgPipeUid[1]);
@@ -547,7 +551,7 @@ int SceNetAdhocMatchingContext::sendMemberListToTarget(SceNetAdhocMatchingTarget
         .sin_vport = htons(port),
     };
 
-    auto result = sendto(sendSocket, (char *)memberMsg, memberMsgSize, flags, (sockaddr *)&addr, sizeof(SceNetSockaddrIn));
+    auto result = sendto(sendSocket, memberMsg->serialize().data(), memberMsgSize, flags, (sockaddr *)&addr, sizeof(SceNetSockaddrIn));
 
     if (result == SCE_NET_ERROR_EAGAIN) {
         result = SCE_NET_ADHOC_MATCHING_OK;
@@ -638,6 +642,10 @@ int SceNetAdhocMatchingContext::setHelloOpt(SceSize optlen, void *opt) {
 int SceNetAdhocMatchingContext::broadcastHello(EmuEnvState &emuenv, SceUID thread_id) {
     ZoneScopedC(0xF6C2FF);
     const int flags = 0x400; // 0x480 if sdk version < 0x1500000
+
+    if (this->helloMsg == nullptr) {
+        return SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ARG;
+    }
 
     SceNetSockaddrIn addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
@@ -772,7 +780,7 @@ void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID threa
 
 int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data) {
     ZoneScopedC(0xF6C2FF);
-    LOG_CRITICAL("Send message");
+    LOG_CRITICAL("Send message {}", (int)type);
     const int flags = 0x400; // 0x480 if sdk version < 0x1500000
 
     auto *msg = new SceNetAdhocMatchingDataMessage();
@@ -809,7 +817,7 @@ int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, Sce
 
 int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt) {
     ZoneScopedC(0xF6C2FF);
-    LOG_CRITICAL("Send OPT DATA");
+    LOG_CRITICAL("Send OPT DATA {}",(int)type);
     const int flags = 0x400; // 0x480 if sdk version < 0x1500000
     int headerSize = 4;
 
@@ -827,8 +835,8 @@ int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID 
     msg->packetLength = htons(optlen);
 
     if (optlen > 0) {
-        msg->data.resize(optlen);
-        memcpy(msg->data.data(), opt, optlen);
+        msg->dataBuffer.resize(optlen);
+        memcpy(msg->dataBuffer.data(), opt, optlen);
     }
 
     if (headerSize == 0x14) {
@@ -844,7 +852,7 @@ int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID 
         .sin_vport = htons(port),
     };
 
-    auto result = CALL_EXPORT(sceNetSendto, this->sendSocket, &msg, optlen + headerSize, flags, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
+    auto result = CALL_EXPORT(sceNetSendto, this->sendSocket, msg->serialize().data(), optlen + headerSize, flags, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
 
     if (result == SCE_NET_ERROR_EAGAIN) {
         result = SCE_NET_ADHOC_MATCHING_OK;

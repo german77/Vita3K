@@ -129,6 +129,7 @@ enum SceNetAdhocMatchingPacketType : uint8_t {
 };
 
 enum SceNetAdhocMatchingEvent : uint32_t {
+    SCE_NET_ADHOC_MATCHING_EVENT_ABORT = 0,
     SCE_NET_ADHOC_MATCHING_EVENT_PACKET = 1,
     SCE_NET_ADHOC_MATCHING_EVENT_UNK2 = 2,
     SCE_NET_ADHOC_MATCHING_EVENT_UNK3 = 3,
@@ -167,9 +168,30 @@ struct SceNetAdhocMatchingOptMessage {
     uint8_t one;
     SceNetAdhocMatchingPacketType type;
     SceUShort16 packetLength;
-    std::vector<char> data;
+    std::vector<char> dataBuffer;
     int targetCount;
     char zero[0xc];
+
+    std::vector<char> serialize() {
+        std::vector<char> data(dataBuffer.size() + 0x14);
+        memcpy(data.data(), &one, sizeof(uint8_t));
+        memcpy(data.data() + 0x1, &type, sizeof(SceNetAdhocMatchingPacketType));
+        memcpy(data.data() + 0x2, &packetLength, sizeof(SceUShort16));
+        memcpy(data.data() + 0x4, dataBuffer.data(), dataBuffer.size());
+        memcpy(data.data() + 0x4 + dataBuffer.size(), &targetCount, sizeof(int));
+        memcpy(data.data() + 0x8 + dataBuffer.size(), &zero, sizeof(0xc));
+        return data;
+    }
+
+    void parse(char *data, SceSize dataLen) {
+        memcpy(&one, data, sizeof(uint8_t));
+        memcpy(&type, data + 0x1, sizeof(SceNetAdhocMatchingPacketType));
+        memcpy(&packetLength, data + 0x2, sizeof(SceUShort16));
+        dataBuffer.resize(dataLen - 0x14);
+        memcpy(dataBuffer.data(), data + 0x4, dataBuffer.size());
+        memcpy(&targetCount, data + 0x4 + dataBuffer.size(), sizeof(int));
+        memcpy(&zero, data + 0x8 + dataBuffer.size(), sizeof(0xc));
+    }
 };
 
 struct SceNetAdhocMatchingByeMessage {
@@ -191,8 +213,8 @@ struct SceNetAdhocMatchingHelloMessage {
     std::vector<char> serialize() {
         std::vector<char> data(optBuffer.size() + 0x1c);
         memcpy(data.data(), &one, sizeof(uint8_t));
-        memcpy(data.data() + 0x1, &type, sizeof(uint8_t));
-        memcpy(data.data() + 0x2, &packetLength, sizeof(int));
+        memcpy(data.data() + 0x1, &type, sizeof(SceNetAdhocMatchingPacketType));
+        memcpy(data.data() + 0x2, &packetLength, sizeof(SceUShort16));
         memcpy(data.data() + 0x4, &helloInterval, sizeof(int));
         memcpy(data.data() + 0x8, &rexmtInterval, sizeof(int));
         memcpy(data.data() + 0xC, optBuffer.data(), optBuffer.size());
@@ -203,8 +225,8 @@ struct SceNetAdhocMatchingHelloMessage {
 
     void parse(char *data, SceSize dataLen) {
         memcpy(&one, data, sizeof(uint8_t));
-        memcpy(&type, data + 0x1, sizeof(uint8_t));
-        memcpy(&packetLength, data + 0x2, sizeof(int));
+        memcpy(&type, data + 0x1, sizeof(SceNetAdhocMatchingPacketType));
+        memcpy(&packetLength, data + 0x2, sizeof(SceUShort16));
         memcpy(&helloInterval, data + 0x4, sizeof(int));
         memcpy(&rexmtInterval, data + 0x8, sizeof(int));
         optBuffer.resize(dataLen - 0x1c);
@@ -220,6 +242,25 @@ struct SceNetAdhocMatchingMemberMessage {
     SceUShort16 packetLength;
     SceNetInAddr parent;
     std::vector<SceNetInAddr> members;
+
+    std::vector<char> serialize() {
+        std::vector<char> data(members.size() * sizeof(SceNetInAddr) + 0x8);
+        memcpy(data.data(), &one, sizeof(uint8_t));
+        memcpy(data.data() + 0x1, &type, sizeof(SceNetAdhocMatchingPacketType));
+        memcpy(data.data() + 0x2, &packetLength, sizeof(SceUShort16));
+        memcpy(data.data() + 0x4, &parent, sizeof(SceNetInAddr));
+        memcpy(data.data() + 0x8, members.data(), members.size() * sizeof(SceNetInAddr));
+        return data;
+    }
+
+    void parse(char *data, SceSize dataLen) {
+        memcpy(&one, data, sizeof(uint8_t));
+        memcpy(&type, data + 0x1, sizeof(SceNetAdhocMatchingPacketType));
+        memcpy(&packetLength, data + 0x2, sizeof(SceUShort16));
+        memcpy(&parent, data + 0x4, sizeof(SceNetInAddr));
+        members.resize((dataLen - 0x8)/sizeof(SceNetInAddr));
+        memcpy(members.data(), data + 0x8, members.size() * sizeof(SceNetInAddr));
+    }
 };
 
 struct SceNetAdhocMatchingTarget;
