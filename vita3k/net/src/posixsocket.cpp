@@ -377,8 +377,8 @@ int PosixSocket::recv_packet(void *buf, unsigned int len, int flags, SceNetSocka
 
             uint8_t addrr[4];
             memcpy(addrr, &inaddr->sin_addr, 4);
-            LOG_INFO("recvfrom {} {} {} {} {}", sock, len, flags, data, res);
-            LOG_INFO("recvfromadd {} {}.{}.{}.{}:{} {}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), *fromlen);
+            //LOG_INFO("recvfrom {} {} {} {} {}", sock, len, flags, data, res);
+            //LOG_INFO("recvfromadd {} {}.{}.{}.{}:{} {}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), *fromlen);
         }
 
         return translate_return_value(res);
@@ -399,14 +399,14 @@ int PosixSocket::send_packet(const void *msg, unsigned int len, int flags, const
             std::string data = std::string((char *)msg, len);
             uint8_t addrr[4];
             memcpy(addrr, &inaddr->sin_addr, 4);
-            LOG_ERROR("sendto {} {} {} {} {} {}", sock, data, len, flags, sizeof(sockaddr_in), result);
-            LOG_ERROR("sendtoadd {} {}.{}.{}.{}:{}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port));
+            //LOG_ERROR("sendto {} {} {} {} {} {}", sock, data, len, flags, sizeof(sockaddr_in), result);
+            //LOG_ERROR("sendtoadd {} {}.{}.{}.{}:{}", inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port));
         }
         return result;
     } else {
         if (len > 0) {
             std::string data = std::string((char *)msg, len);
-            LOG_ERROR("sendto {} {} {} {}", sock, data, len, flags);
+            //LOG_ERROR("sendto {} {} {} {}", sock, data, len, flags);
         }
         return translate_return_value(send(sock, (const char *)msg, len, posix_flags));
     }

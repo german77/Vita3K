@@ -27,16 +27,15 @@
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
 
-int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
+int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
     tracy::SetThreadName("adhocMatchingEventThread");
-    auto ctx = emuenv->adhoc.findMatchingContextById(id);
-    const ThreadStatePtr event_thread = emuenv->kernel.create_thread(emuenv->mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
-    SceUID thread_id = event_thread->id;
+    auto ctx = emuenv.adhoc.findMatchingContextById(id);
+    SceUID thread_id = ctx->event_thread_id;
 
     SceNetAdhocMatchingPipeMessage pipeMessage;
     while (read(ctx->msgPipeUid[0], &pipeMessage, sizeof(pipeMessage)) >= 0) {
         ZoneScopedC(0xFFC2C6);
-        std::lock_guard<std::recursive_mutex> guard(emuenv->adhoc.getMutex());
+        std::lock_guard<std::recursive_mutex> guard(emuenv.adhoc.getMutex());
         
         int type = pipeMessage.type;
         auto target = pipeMessage.peer;
@@ -46,7 +45,7 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
         switch (type) {
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET: { // Packet received
             target->pipeMsg88.flags &= ~1U;
-            ctx->processPacketFromTarget(*emuenv,thread_id, target);
+            ctx->processPacketFromTarget(emuenv,thread_id, target);
             if (target->rawPacket)
                 delete target->rawPacket;
             target->rawPacket = 0;
@@ -57,12 +56,12 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
             target->pipeMsg88.flags &= ~1U;
             if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2) {
                 if (target->retryCount-- > 0) {
-                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
-                    ctx->add88TimedFunct(*emuenv, target);
+                    ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
+                    ctx->add88TimedFunct(emuenv, target);
                 }
                 else {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
-                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                    ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
                     ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
                 }
             }
@@ -70,12 +69,12 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
                 target->retryCount++;
                 if (target->retryCount < 1) {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
-                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                    ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
                     ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
                 }
                 else {
-                    ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
-                    ctx->add88TimedFunct(*emuenv, target);
+                    ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
+                    ctx->add88TimedFunct(emuenv, target);
                 }
             }
             break;
@@ -88,14 +87,14 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
             target->uuid2++;
             if (target->uuid2 < 1) {
                 ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
-                ctx->sendOptDataToTarget(*emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
+                ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
                 ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
             }
             else {
                 if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
                     ctx->sendMemberListToTarget(target);
                 }
-                ctx->add88TimedFunctionWithParentInterval(*emuenv, target);
+                ctx->add88TimedFunctionWithParentInterval(emuenv, target);
             }
             break;
         }
@@ -105,9 +104,9 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
             // also count ourselves
             int result = 0;
             if (num + 1 < ctx->maxnum)
-                result = ctx->broadcastHello(*emuenv, thread_id);
+                result = ctx->broadcastHello(emuenv, thread_id);
 
-            ctx->addHelloTimedFunct(*emuenv, ctx->helloInterval);
+            ctx->addHelloTimedFunct(emuenv, ctx->helloInterval);
             break;
         }
         case SCE_NET_ADHOC_MATCHING_EVENT_UNK5: {
@@ -129,16 +128,13 @@ int adhocMatchingEventThread(EmuEnvState *emuenv, int id) {
         }
     }
 
-    event_thread->exit(0);
     return 0;
 };
 
-int adhocMatchingInputThread(EmuEnvState* emuenvn, int id) {
+int adhocMatchingInputThread(EmuEnvState &emuenv, int id) {
     tracy::SetThreadName("adhocMatchingInputThread");
-    auto& emuenv = *emuenvn;
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
-    const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
-    SceUID thread_id = input_thread->id;
+   SceUID thread_id = ctx->input_thread_id;
 
     SceNetSockaddrIn fromAddr{};
     unsigned int fromAddrLen = sizeof(SceNetSockaddrIn);
@@ -151,18 +147,17 @@ int adhocMatchingInputThread(EmuEnvState* emuenvn, int id) {
             do {
                 res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr*)&fromAddr, &fromAddrLen);
                 if (res < SCE_NET_ADHOC_MATCHING_OK) {
-                    input_thread->exit(0);
                     return 0; // exit the thread immediatly
                 }
             } while (*ctx->rxbuf != 1);
 
-            // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
-            if(fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort){
-                continue;
-            }
-
             uint8_t addr[4];
             memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
+            // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
+            if(fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort){
+                //continue;
+            }
+
             std::string data = std::string(ctx->rxbuf, res);
             LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
 
@@ -209,13 +204,12 @@ int adhocMatchingInputThread(EmuEnvState* emuenvn, int id) {
             write(ctx->msgPipeUid[1], &target->pipeMsg28, sizeof(target->pipeMsg28));
         }
     }
-    input_thread->exit(0);
     return 0;
 };
 
-int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id) {
+int adhocMatchingCalloutThread(EmuEnvState &emuenv, int id) {
     tracy::SetThreadName("adhocMatchingCalloutThread");
-    auto ctx = emuenv->adhoc.findMatchingContextById(id);
+    auto ctx = emuenv.adhoc.findMatchingContextById(id);
 
     do {
         ZoneScopedC(0xFFC2C6);

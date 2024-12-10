@@ -589,8 +589,6 @@ EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, S
     SocketPtr sock = std::make_shared<PosixSocket>(domain, hostSockType, protocol);
     auto id = ++emuenv.net.next_id;
     emuenv.net.socks.emplace(id, sock);
-    DWORD timeout = 1 * 1000;
-    sock->set_socket_options(SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     return id;
 }
 
