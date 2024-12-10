@@ -39,7 +39,8 @@ int SceNetAdhocMatchingCalloutSyncing::initializeCalloutThread(EmuEnvState &emue
     }
 
     this->shouldExit = false;
-    this->calloutThread = std::thread(adhocMatchingCalloutThread, &emuenv, id);
+    this->calloutThread = std::thread(adhocMatchingCalloutThread, std::ref(emuenv), id);
+    this->calloutThread.detach();
     this->isInitialized = true;
 
     return SCE_NET_ADHOC_MATCHING_OK;

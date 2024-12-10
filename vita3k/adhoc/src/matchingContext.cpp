@@ -48,6 +48,13 @@ int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUI
         return result;
     }
 
+    /* const int timeout = 1000;
+    result = CALL_EXPORT(sceNetSetsockopt, this->recvSocket, SCE_NET_SOL_SOCKET, SCE_NET_SO_RCVTIMEO, &timeout, sizeof(timeout));
+    if (result < SCE_NET_ADHOC_MATCHING_OK) {
+        CALL_EXPORT(sceNetSocketClose, this->recvSocket);
+        return result;
+    }*/
+
     SceNetSockaddrIn recv_addr = {
         .sin_len = sizeof(SceNetSockaddrIn),
         .sin_family = AF_INET,
@@ -62,8 +69,10 @@ int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUI
         CALL_EXPORT(sceNetSocketClose, this->recvSocket);
         return bindResult;
     }
-
-    this->inputThread = std::thread(adhocMatchingInputThread, &emuenv, thread_id, this->id);
+    const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+    this->input_thread_id = thread_id;
+    this->inputThread = std::thread(adhocMatchingInputThread, std::ref(emuenv), this->id);
+    this->inputThread.detach();
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -100,7 +109,7 @@ int SceNetAdhocMatchingContext::initializeSendSocket(EmuEnvState &emuenv, SceUID
             .sin_port = htons(SCE_NET_ADHOC_DEFAULT_PORT),
             .sin_vport = htons(this->port + portOffset),
         };
-        this->ownPort = htons(this->port + portOffset);
+        this->ownPort = htons(SCE_NET_ADHOC_DEFAULT_PORT) +htons(this->port + portOffset);
         int result = CALL_EXPORT(sceNetBind, this->sendSocket, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
         portOffset++;
     } while (result == SCE_NET_ERROR_EADDRINUSE);
@@ -129,8 +138,10 @@ int SceNetAdhocMatchingContext::initializeEventHandler(EmuEnvState &emuenv, SceU
     if (pipesResult < SCE_NET_ADHOC_MATCHING_OK) {
         return pipesResult;
     }
-
-    this->eventThread = std::thread(adhocMatchingEventThread, &emuenv, thread_id, this->id);
+    const ThreadStatePtr event_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+    this->event_thread_id = event_thread->id;
+    this->eventThread = std::thread(adhocMatchingEventThread, std::ref(emuenv), this->id);
+    this->eventThread.detach();
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }
@@ -188,12 +199,12 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
                 setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 deleteAllTimedFunctions(emuenv, target);
-                notifyHandler(&emuenv, thread_id, 5, &target->addr, 0, nullptr);
+                notifyHandler(emuenv, thread_id, 5, &target->addr, 0, nullptr);
                 break;
             case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
                 setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 deleteAllTimedFunctions(emuenv, target);
-                notifyHandler(&emuenv, thread_id, 3, &target->addr, 0, nullptr);
+                notifyHandler(emuenv, thread_id, 3, &target->addr, 0, nullptr);
                 break;
             }
         }
@@ -215,9 +226,9 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             }
             if (targetCount + 1 < maxnum) {
                 if (target->packetLength - 0xc < 1) {
-                    this->notifyHandler(&emuenv, thread_id, 1, &target->addr, 0, nullptr);
+                    this->notifyHandler(emuenv, thread_id, 1, &target->addr, 0, nullptr);
                 } else {
-                    this->notifyHandler(&emuenv, thread_id, 1, &target->addr, target->packetLength - 0xc, target->rawPacket + 0xc);
+                    this->notifyHandler(emuenv, thread_id, 1, &target->addr, target->packetLength - 0xc, target->rawPacket + 0xc);
                 }
             }
         }
@@ -231,9 +242,9 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
                 sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9, 0, NULL);
                 int data_size = target->packetLength - 4;
                 if (data_size < 1) {
-                    this->notifyHandler(&emuenv, thread_id, 2, &target->addr, 0, nullptr);
+                    this->notifyHandler(emuenv, thread_id, 2, &target->addr, 0, nullptr);
                 } else {
-                    this->notifyHandler(&emuenv, thread_id, 2, &target->addr, data_size, target->rawPacket + 0x4);
+                    this->notifyHandler(emuenv, thread_id, 2, &target->addr, data_size, target->rawPacket + 0x4);
                 }
             } else {
                 sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
@@ -247,7 +258,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
                 setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 deleteAllTimedFunctions(emuenv, target);
                 sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
-                this->notifyHandler(&emuenv, thread_id, 5, &target->addr, 0, nullptr);
+                this->notifyHandler(emuenv, thread_id, 5, &target->addr, 0, nullptr);
             }
             break;
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
@@ -261,9 +272,9 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             add88TimedFunct(emuenv, target);
             int data_size = target->packetLength - 4;
             if (data_size < 1) {
-                this->notifyHandler(&emuenv, thread_id, 6, &target->addr, 0, nullptr);
+                this->notifyHandler(emuenv, thread_id, 6, &target->addr, 0, nullptr);
             } else {
-                this->notifyHandler(&emuenv, thread_id, 6, &target->addr, data_size, target->rawPacket + 0x4);
+                this->notifyHandler(emuenv, thread_id, 6, &target->addr, data_size, target->rawPacket + 0x4);
             }
             break;
         }
@@ -271,7 +282,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(emuenv, target);
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
-            this->notifyHandler(&emuenv, thread_id, 9, &target->addr, 0, nullptr);
+            this->notifyHandler(emuenv, thread_id, 9, &target->addr, 0, nullptr);
         }
         break;
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3:
@@ -735,38 +746,28 @@ void SceNetAdhocMatchingContext::deleteAllTimedFunctions(EmuEnvState &emuenv, Sc
     }
 }
 
-void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState *emuenv, SceUID thread_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt) {
+void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID thread_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt) {
     ZoneScopedC(0xF6C2FF);
     if (!this->handler.pc) {
         return;
     }
 
-    const Address vPeer =alloc(emuenv->mem, sizeof(SceNetInAddr), "adhocHandlerPeer");
-    const Address vOpt = alloc(emuenv->mem, optLen, "adhocHandlerOpt");
+    Address vPeer = alloc(emuenv.mem, sizeof(SceNetInAddr), "adhocHandlerPeer");
+    Address vOpt = alloc(emuenv.mem, optLen+1, "adhocHandlerOpt");
     if (peer) {
-        memcpy(Ptr<char>(vPeer).get(emuenv->mem), peer, sizeof(SceNetInAddr));
+        memcpy(Ptr<char>(vPeer).get(emuenv.mem), peer, sizeof(SceNetInAddr));
     }
     if (opt) {
-        memcpy(Ptr<char>(vOpt).get(emuenv->mem), opt, optLen);
+        memcpy(Ptr<char>(vOpt).get(emuenv.mem), opt, optLen);
     }
 
-    SceNetAdhocHandlerArguments handleArgs{
-        .id = this->id,
-        .event = 1,
-        .peer = vPeer,
-        .optlen = optLen,
-        .opt = vOpt
-    };
+    LOG_CRITICAL("NotifyHandler {}",type);
+    const ThreadStatePtr thread = lock_and_find(thread_id, emuenv.kernel.threads, emuenv.kernel.mutex);
 
-    auto data = Ptr<SceNetAdhocHandlerArguments>(alloc(emuenv->mem, sizeof(handleArgs), "handleArgs"));
-    memcpy(data.get(emuenv->mem), &handleArgs, sizeof(handleArgs));
+    thread->run_adhoc_callback(this->handler.pc, this->id, (uint32_t)type, Ptr<char>(vPeer), optLen, Ptr<char>(vOpt));
 
-    const ThreadStatePtr thread = lock_and_find(thread_id, emuenv->kernel.threads, emuenv->kernel.mutex);
-    thread->run_guest_function(this->handler.pc, sizeof(SceNetAdhocHandlerArguments), data);
-
-    free(emuenv->mem, vPeer); // free peer
-    free(emuenv->mem, vOpt); // free opt
-    free(emuenv->mem, data); // free opt
+    free(emuenv.mem, vPeer); // free peer
+    free(emuenv.mem, vOpt); // free opt
 }
 
 int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data) {

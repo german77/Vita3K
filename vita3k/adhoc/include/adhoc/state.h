@@ -36,9 +36,9 @@
 DECL_EXPORT(SceInt32, sceNetCtlAdhocGetInAddr, SceNetInAddr *inaddr);
 
 int sendHelloReqToPipe(void *arg);
-int adhocMatchingEventThread(EmuEnvState *emuenv, int id);
-int adhocMatchingInputThread(EmuEnvState *emuenv, int id);
-int adhocMatchingCalloutThread(EmuEnvState *emuenv, int id);
+int adhocMatchingEventThread(EmuEnvState &emuenv, int id);
+int adhocMatchingInputThread(EmuEnvState &emuenv, int id);
+int adhocMatchingCalloutThread(EmuEnvState &emuenv, int id);
 
 int pipe88CallbackType2(void *args);
 int pipe88CallbackType3(void *args);
@@ -342,7 +342,7 @@ struct SceNetAdhocMatchingContext {
     void deleteA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
     void deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
 
-    void notifyHandler(EmuEnvState *emuenv, SceUID thread_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt);
+    void notifyHandler(EmuEnvState &emuenv, SceUID thread_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt);
 
     int sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data);
     int sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt);
@@ -371,8 +371,11 @@ struct SceNetAdhocMatchingContext {
     int recvSocket; // Socket used by parent to broadcast
 
     std::thread eventThread;
-    int msgPipeUid[2]; // 0 = read, 1 = write
     std::thread inputThread;
+    SceUID event_thread_id;
+    SceUID input_thread_id;
+
+    int msgPipeUid[2]; // 0 = read, 1 = write
 
     unsigned int totalHelloLength;
     SceNetAdhocMatchingHelloMessage *helloMsg;
