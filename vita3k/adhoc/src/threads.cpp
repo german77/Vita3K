@@ -64,7 +64,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
                 else {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
+                    ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr, 0, nullptr);
                 }
             }
             if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
@@ -72,7 +72,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
                 if (target->retryCount < 1) {
                     ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                     ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                    ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
+                    ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr, 0, nullptr);
                 }
                 else {
                     ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
@@ -90,7 +90,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
             if (target->uuid2 < 1) {
                 ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
-                ctx->notifyHandler(emuenv, thread_id, 8, &target->addr, 0, nullptr);
+                ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr, 0, nullptr);
             }
             else {
                 if (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || (ctx->mode == SCE_NET_ADHOC_MATCHING_MODE_UDP && ctx->isTargetAddressHigher(target))) {
@@ -119,13 +119,13 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
             target->context_uuid++;
             if (target->context_uuid < 1) {
                 ctx->setTargetSendDataStatus(target, 1);
-                ctx->notifyHandler(emuenv, thread_id, 0xd, &target->addr, 0, nullptr);
+                ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_TIMEOUT, &target->addr, 0, nullptr);
             }
             break;
         }
         }
 
-        if (target != nullptr && target->unk_54 == 1 && (target->pipeMsg28.flags & 1) == 0 && (target->pipeMsg88.flags & 1) == 0) {
+        if (target != nullptr && target->delete_target && (target->pipeMsg28.flags & 1) == 0 && (target->pipeMsg88.flags & 1) == 0) {
             ctx->deleteTarget(target);
         }
     }
@@ -157,11 +157,11 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, int id) {
             memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
             // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
             if(fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort){
-                continue;
+                //continue;
             }
 
             std::string data = std::string(ctx->rxbuf, res);
-            //LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
+            LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
 
             SceUShort16 nPacketLength; // network byte order of packet length
             memcpy(&nPacketLength, ctx->rxbuf + 2, 2);

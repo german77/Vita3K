@@ -306,7 +306,7 @@ struct SceNetAdhocMatchingTarget {
     int msgPipeUid[2]; // 0 = read, 1 = write
 
     int unk_50;
-    bool unk_54;
+    bool delete_target;
     int targetCount;
     int unk_5c;
 
@@ -383,7 +383,7 @@ struct SceNetAdhocMatchingContext {
     void deleteA0TimedFunction(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
     void deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget *target);
 
-    void notifyHandler(EmuEnvState &emuenv, SceUID thread_id, int type, SceNetInAddr *peer, SceSize optLen, void *opt);
+    void notifyHandler(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingHandlerEventType type, SceNetInAddr *peer, SceSize optLen = 0, void *opt = nullptr);
 
     int sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int datalen, char *data);
     int sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target, SceNetAdhocMatchingPacketType type, int optlen, char *opt);
