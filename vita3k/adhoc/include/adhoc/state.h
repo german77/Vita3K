@@ -121,7 +121,7 @@ enum SceNetAdhocMatchingPacketType : uint8_t {
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK4 = 4,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL = 5,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ADDRS = 6,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK7 = 7,
+    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ADDRS_ACK = 7,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_BYE = 8,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9 = 9,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_DATA = 10,
@@ -291,7 +291,7 @@ struct SceNetAdhocMatchingTarget {
 
     SceSize rawPacketLength;
     char *rawPacket;
-    SceSize packetLength;
+    int packetLength;
 
     SceSize optLength;
     char *opt;
@@ -300,7 +300,7 @@ struct SceNetAdhocMatchingTarget {
     SceNetAdhocMatchingPipeMessage pipeMsg88;
 
     bool is_88_pending;
-    int uuid2;
+    int retryCount2;
 
     int retryCount;
     int msgPipeUid[2]; // 0 = read, 1 = write

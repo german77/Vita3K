@@ -87,8 +87,8 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, int id) {
             if (target->status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED) {
                 break;
             }
-            target->uuid2++;
-            if (target->uuid2 < 1) {
+            target->retryCount2++;
+            if (target->retryCount2 < 1) {
                 ctx->setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 ctx->sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, nullptr);
                 ctx->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr, 0, nullptr);
