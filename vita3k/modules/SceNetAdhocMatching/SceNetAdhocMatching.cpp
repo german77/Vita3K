@@ -329,6 +329,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *target, int o
         ctx->sendOptDataToTarget(emuenv, thread_id, foundTarget, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, foundTarget->optLength, foundTarget->opt);
         ctx->add88TimedFunct(emuenv, foundTarget);
         ctx->setTargetStatus(foundTarget, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2);
+        foundTarget->retryCount = ctx->retryCount;
         break;
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2:
         if (membersCount + 1 >= ctx->maxnum)
