@@ -56,7 +56,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             continue;
         }
 
-        if (pipeMessage.target->delete_target && !pipeMessage.target->pipeMsg28.isSheduled && !pipeMessage.target->targetTimeout.message.isSheduled) {
+        if (pipeMessage.target->delete_target && !pipeMessage.target->incomingPacketMessage.isSheduled && !pipeMessage.target->targetTimeout.message.isSheduled) {
             ctx->deleteTarget(pipeMessage.target);
         }
     }
@@ -71,35 +71,39 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
     unsigned int fromAddrLen = sizeof(SceNetSockaddrIn);
 
     while (true) {
-        int res;
-        SceUShort16 packetLength{};
-        do {
-            do {
-                res = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)&fromAddr, &fromAddrLen);
-                if (res < SCE_NET_ADHOC_MATCHING_OK) {
-                    return 0; // exit the thread immediatly
-                }
-            } while (*ctx->rxbuf != 1);
+        int rawPacketSize;
+        SceNetAdhocMatchingMessageHeader packet;
 
-            uint8_t addr[4];
-            memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
+        // Wait until valid data arrives
+        while (true) {
+            rawPacketSize = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)&fromAddr, &fromAddrLen);
+            if (rawPacketSize < SCE_NET_ADHOC_MATCHING_OK)
+                return 0;
+            if (rawPacketSize < sizeof(SceNetAdhocMatchingMessageHeader))
+                continue;
+            if (fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort)
+                continue;
 
-            // Ignore packets of our own (own broadcast) and make sure the first 4 bytes is host byte order 1
-            if (fromAddr.sin_addr.s_addr == ctx->ownAddress && fromAddr.sin_port == ctx->ownPort) {
-                // continue;
-            }
+            packet.parse(ctx->rxbuf, rawPacketSize);
+            if (packet.one != 1)
+                continue;
+            if (rawPacketSize >= packet.packetLength + sizeof(SceNetAdhocMatchingMessageHeader))
+                break;
+        }
 
-            std::string data = std::string(ctx->rxbuf, res);
-            LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
-
-            memcpy(&packetLength, ctx->rxbuf + 2, 2);
-            packetLength = ntohs(packetLength);
-        } while (res < packetLength + 4);
+        uint8_t addr[4];
+        memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
+        std::string data = "";
+        for (std::size_t i = 0; i < rawPacketSize; i++) {
+            data = fmt::format("{} {:x}", data, ((uint8_t *)ctx->rxbuf)[i]);
+        }
+        LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
 
         // We received the whole packet, we can now commence the parsing and the fun
         std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
-        ctx->handleIncommingPackage(&fromAddr.sin_addr,packetLength, res);
+        ctx->handleIncommingPackage(&fromAddr.sin_addr, rawPacketSize, packet.packetLength);
     }
+
     return 0;
 };
 

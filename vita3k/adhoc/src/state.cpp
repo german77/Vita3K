@@ -16,11 +16,8 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include <adhoc/state.h>
-#include <util/tracy.h>
-TRACY_MODULE_NAME(SceNetAdhocMatching);
 
 int AdhocState::initializeMutex() {
-    ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     // Initialize mutex
     is_mutex_initialized = true;
     FrameMarkNamed("Adhoc");
@@ -28,7 +25,6 @@ int AdhocState::initializeMutex() {
 }
 
 int AdhocState::deleteMutex() {
-    ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     if (is_mutex_initialized) {
         // Delete mutex
     }
@@ -38,31 +34,26 @@ int AdhocState::deleteMutex() {
 }
 
 std::mutex &AdhocState::getMutex() {
-    ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     return mutex;
 }
 
 int AdhocState::createMSpace(SceSize poolsize, void *poolptr) {
-    ZoneScopedC(0xF6C2FF);
     // Just a placeholder. We don't really need this kind of allocation
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 int AdhocState::deleteMSpace() {
     tracy::SetThreadName("deleteMSpace");
-    ZoneScopedC(0xF6C2FF);
     // Just a placeholder. We don't really need this kind of allocation
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 int AdhocState::initializeMatchingContextList() {
-    ZoneScopedC(0xF6C2FF);
     contextList = nullptr;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 int AdhocState::isAnyMatchingContextRunning() {
-    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     for (; context != nullptr; context = context->getNext()) {
         if (context->getStatus() != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING)
@@ -72,7 +63,6 @@ int AdhocState::isAnyMatchingContextRunning() {
 }
 
 SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(SceUID id) {
-    ZoneScopedC(0xF6C2FF);
     // Iterate Matching Context List
     SceNetAdhocMatchingContext *context = contextList;
     for (; context != nullptr; context = context->getNext()) {
@@ -87,7 +77,6 @@ SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(SceUID id) {
 };
 
 int AdhocState::createMatchingContext(SceUShort16 port) {
-    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
 
     // Check for port conflicts
@@ -142,7 +131,6 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
 }
 
 void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
-    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     SceNetAdhocMatchingContext *previous_ctx = nullptr;
     for (; context != nullptr; context = context->getNext()) {
@@ -169,7 +157,6 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
 };
 
 void AdhocState::deleteAllMatchingContext() {
-    ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     while (context != nullptr) {
         auto *next_ctx = context->getNext();

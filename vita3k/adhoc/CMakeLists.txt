@@ -4,6 +4,7 @@ add_library(
     src/calloutSyncing.cpp
     src/matchingContext.cpp
     src/state.cpp
+    src/target.cpp
     src/threads.cpp
 )
 
