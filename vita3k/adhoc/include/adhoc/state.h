@@ -331,7 +331,7 @@ struct SceNetAdhocMatchingTarget {
     SceSize optLength;
     char *opt;
 
-    SceNetAdhocMatchingPipeMessage pipeMsg28;
+    SceNetAdhocMatchingPipeMessage incomingPacketMessage;
     int retryCount;
     int msgPipeUid[2]; // 0 = read, 1 = write
 

@@ -167,7 +167,6 @@ int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUI
     const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
     this->input_thread_id = thread_id;
     this->inputThread = std::thread(adhocMatchingInputThread, std::ref(emuenv), this->input_thread_id, this->id);
-    this->inputThread.detach();
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -235,7 +234,6 @@ int SceNetAdhocMatchingContext::initializeEventHandler(EmuEnvState &emuenv, SceU
     const ThreadStatePtr event_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
     this->event_thread_id = event_thread->id;
     this->eventThread = std::thread(adhocMatchingEventThread, std::ref(emuenv), this->event_thread_id, this->id);
-    this->eventThread.detach();
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }
@@ -577,7 +575,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(emuenv, target);
         }
-        notifyHandler(emuenv, id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_BYE, &target.addr);
+        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_BYE, &target.addr);
         target.delete_target = true;
         break;
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9:
@@ -731,7 +729,7 @@ int SceNetAdhocMatchingContext::sendData(EmuEnvState &emuenv, SceUID thread_id, 
 
 
 void SceNetAdhocMatchingContext::handleEventMessage(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target) {
-    target->pipeMsg28.isSheduled = false;
+    target->incomingPacketMessage.isSheduled = false;
     if (target == nullptr)
         return;
 
@@ -748,28 +746,25 @@ void SceNetAdhocMatchingContext::handleEventRegistrationTimeout(EmuEnvState &emu
         return;
 
     if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2) {
-        if (target->retryCount> 0) {
-            target->retryCount--;
-        }
-        if (target->unk_50 || target->retryCount > 0) {
+        if (target->unk_50 || target->retryCount-- > 0) {
             sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK, target->optLength, target->opt);
             addRegisterTargetTimeout(emuenv, *target);
-        } else {
-            setTargetStatus(*target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
-            sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr);
+            return;
         }
+        setTargetStatus(*target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+        sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
+        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr);
     }
+
     if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
-        target->retryCount++;
-        if (target->retryCount < 1) {
-            setTargetStatus(*target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
-            sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr);
-        } else {
+        if (target->retryCount-- > 0) {
             sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3, target->optLength, target->opt);
             addRegisterTargetTimeout(emuenv, *target);
+            return;
         }
+        setTargetStatus(*target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
+        sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
+        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr);
     }
 }
 
@@ -840,7 +835,7 @@ void SceNetAdhocMatchingContext::handleIncommingPackage(SceNetInAddr *addr, SceS
         return;
     }
 
-    if (!target->pipeMsg28.isSheduled) {
+    if (!target->incomingPacketMessage.isSheduled) {
         auto rawPacket = new char[bufferLength];
         if (rawPacket == nullptr)
             return;
@@ -852,10 +847,10 @@ void SceNetAdhocMatchingContext::handleIncommingPackage(SceNetInAddr *addr, SceS
         target->packetLength = packetLength + 4;
         target->keepAliveInterval = keepAliveInterval;
 
-        target->pipeMsg28.type = SCE_NET_ADHOC_MATCHING_EVENT_PACKET;
-        target->pipeMsg28.target = target;
-        target->pipeMsg28.isSheduled = true;
-        write(getWritePipeUid(), &target->pipeMsg28, sizeof(target->pipeMsg28));
+        target->incomingPacketMessage.type = SCE_NET_ADHOC_MATCHING_EVENT_PACKET;
+        target->incomingPacketMessage.target = target;
+        target->incomingPacketMessage.isSheduled = true;
+        write(getWritePipeUid(), &target->incomingPacketMessage, sizeof(target->incomingPacketMessage));
     }
 }
 
@@ -1195,8 +1190,6 @@ void SceNetAdhocMatchingContext::deleteHelloMessage() {
 }
 
 void SceNetAdhocMatchingContext::addHelloTimedFunct(EmuEnvState &emuenv, uint64_t time_interval) {
-    ZoneScopedC(0xF6C2FF);
-    // std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (shouldHelloReqBeProcessed) {
         calloutSyncing.deleteTimedFunction(&helloTimedFunction);
         shouldHelloReqBeProcessed = false;
@@ -1206,8 +1199,6 @@ void SceNetAdhocMatchingContext::addHelloTimedFunct(EmuEnvState &emuenv, uint64_
 }
 
 void SceNetAdhocMatchingContext::addSendDataTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target) {
-    ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (target.sendDataTimeout.isAckPending) {
         calloutSyncing.deleteTimedFunction(&target.sendDataTimeoutFunction);
         target.sendDataTimeout.isAckPending = false;
@@ -1217,8 +1208,6 @@ void SceNetAdhocMatchingContext::addSendDataTimeout(EmuEnvState &emuenv, SceNetA
 }
 
 void SceNetAdhocMatchingContext::addRegisterTargetTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target) {
-    ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (target.targetTimeout.isAckPending) {
         calloutSyncing.deleteTimedFunction(&target.targetTimeoutFunction);
         target.targetTimeout.isAckPending = false;
@@ -1228,13 +1217,11 @@ void SceNetAdhocMatchingContext::addRegisterTargetTimeout(EmuEnvState &emuenv, S
 }
 
 void SceNetAdhocMatchingContext::addTargetTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target) {
-    ZoneScopedC(0xF6C2FF);
     int interval = keepAliveInterval;
     if (mode == SCE_NET_ADHOC_MATCHING_MODE_CHILD) {
         interval = target.keepAliveInterval;
     }
 
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (target.targetTimeout.isAckPending) {
         calloutSyncing.deleteTimedFunction(&target.targetTimeoutFunction);
         target.targetTimeout.isAckPending = false;
@@ -1244,8 +1231,6 @@ void SceNetAdhocMatchingContext::addTargetTimeout(EmuEnvState &emuenv, SceNetAdh
 }
 
 void SceNetAdhocMatchingContext::deleteHelloTimedFunction(EmuEnvState &emuenv) {
-    ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (!shouldHelloReqBeProcessed)
         return;
 
@@ -1254,8 +1239,6 @@ void SceNetAdhocMatchingContext::deleteHelloTimedFunction(EmuEnvState &emuenv) {
 }
 
 void SceNetAdhocMatchingContext::deleteSendDataTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target) {
-    ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (target.sendDataTimeout.isAckPending) {
         calloutSyncing.deleteTimedFunction(&target.sendDataTimeoutFunction);
         target.sendDataTimeout.isAckPending = false;
@@ -1263,8 +1246,6 @@ void SceNetAdhocMatchingContext::deleteSendDataTimeout(EmuEnvState &emuenv, SceN
 }
 
 void SceNetAdhocMatchingContext::deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target) {
-    ZoneScopedC(0xF6C2FF);
-    std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
     if (target.sendDataTimeout.isAckPending) {
         calloutSyncing.deleteTimedFunction(&target.sendDataTimeoutFunction);
         target.sendDataTimeout.isAckPending = false;
