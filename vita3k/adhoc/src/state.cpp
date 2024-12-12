@@ -37,7 +37,7 @@ int AdhocState::deleteMutex() {
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-std::recursive_mutex &AdhocState::getMutex() {
+std::mutex &AdhocState::getMutex() {
     ZoneScopedC(0xF6C2FF); // Tracy - Track function scope with color thistle
     return mutex;
 }
@@ -64,20 +64,20 @@ int AdhocState::initializeMatchingContextList() {
 int AdhocState::isAnyMatchingContextRunning() {
     ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
-    for (; context != nullptr; context = context->next) {
-        if (context->status != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING)
+    for (; context != nullptr; context = context->getNext()) {
+        if (context->getStatus() != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING)
             return SCE_NET_ADHOC_MATCHING_ERROR_BUSY;
     }
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(int id) {
+SceNetAdhocMatchingContext *AdhocState::findMatchingContextById(SceUID id) {
     ZoneScopedC(0xF6C2FF);
     // Iterate Matching Context List
     SceNetAdhocMatchingContext *context = contextList;
-    for (; context != nullptr; context = context->next) {
+    for (; context != nullptr; context = context->getNext()) {
         return context;
-        if (context->id != id)
+        if (context->getId() != id)
             continue;
         return context;
     }
@@ -91,8 +91,8 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
     SceNetAdhocMatchingContext *context = contextList;
 
     // Check for port conflicts
-    for (; context != nullptr; context = context->next) {
-         if (context->port != port)
+    for (; context != nullptr; context = context->getNext()) {
+         if (context->getPort() != port)
             continue;
         return SCE_NET_ADHOC_MATCHING_ERROR_PORT_IN_USE;
     }
@@ -134,8 +134,8 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
         }
 
         // Add new element to the list
-        newContext->id = next_id;
-        newContext->next = contextList;
+        newContext->setId(next_id);
+        newContext->setNext(contextList);
         contextList = newContext;
         return next_id;
     }
@@ -145,7 +145,7 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
     ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     SceNetAdhocMatchingContext *previous_ctx = nullptr;
-    for (; context != nullptr; context = context->next) {
+    for (; context != nullptr; context = context->getNext()) {
         if (ctx != context) {
             previous_ctx = context;
             continue;
@@ -154,25 +154,25 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
             matchingCtxCount--;
         }
         if (previous_ctx != nullptr) {
-            previous_ctx->next = context->next;
+            previous_ctx->setNext(context->getNext());
             break;
         }
         
-        contextList = context->next;
+        contextList = context->getNext();
         break;
     }
-
-    //delete context;
+    
+    if (ctx != nullptr) {
+        delete ctx;
+        ctx = nullptr;
+    }
 };
 
 void AdhocState::deleteAllMatchingContext() {
     ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingContext *context = contextList;
     while (context != nullptr) {
-        auto *next_ctx = context->next;
-
-        delete context->rxbuf;
-        context->rxbuf = nullptr;
+        auto *next_ctx = context->getNext();
 
         delete context;
         context = next_ctx;
