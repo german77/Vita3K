@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2024 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,28 +15,15 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include "util/log.h"
-#include <adhoc/state.h>
+#include <chrono>
 
-#include <emuenv/state.h>
-#include <kernel/state.h>
-#include <net/types.h>
-#include <thread>
-#include <util/types.h>
-
-#include <cstring>
-
-#include "../SceNet/SceNet.h"
-
-#include <util/tracy.h>
-TRACY_MODULE_NAME(SceNetAdhocMatching);
+#include "adhoc/calloutSyncing.h"
+#include "adhoc/state.h"
+#include "adhoc/threads.h"
 
 int SceNetAdhocMatchingCalloutSyncing::initializeCalloutThread(EmuEnvState &emuenv, SceUID thread_id, int id, int threadPriority, int threadStackSize, int threadCpuAffinityMask) {
-    ZoneScopedC(0xF6C2FF);
-
-    if (this->isInitialized) {
+    if (this->isInitialized)
         return SCE_NET_CALLOUT_ERROR_NOT_TERMINATED;
-    }
 
     this->shouldExit = false;
     this->calloutThread = std::thread(adhocMatchingCalloutThread, std::ref(emuenv), id);
@@ -46,24 +33,21 @@ int SceNetAdhocMatchingCalloutSyncing::initializeCalloutThread(EmuEnvState &emue
 }
 
 void SceNetAdhocMatchingCalloutSyncing::closeCalloutThread() {
-    ZoneScopedC(0xF6C2FF);
-    if (!this->isInitialized) {
+    if (!this->isInitialized)
         return;
-    }
 
     this->shouldExit = true;
     this->condvar.notify_all();
 
     if (this->calloutThread.joinable())
         this->calloutThread.join();
-    
+
     this->isInitialized = false;
 }
 
 int SceNetAdhocMatchingCalloutSyncing::addTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, SceLong64 interval, int (*function)(void *), void *args) {
-    if (!this->isInitialized) {
+    if (!this->isInitialized)
         return SCE_NET_CALLOUT_ERROR_NOT_INITIALIZED;
-    }
 
     uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
     calloutFunction->function = function;
@@ -102,9 +86,8 @@ int SceNetAdhocMatchingCalloutSyncing::addTimedFunction(SceNetAdhocMatchingCallo
 }
 
 int SceNetAdhocMatchingCalloutSyncing::deleteTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, bool *is_deleted) {
-    if (!this->isInitialized) {
+    if (!this->isInitialized)
         return SCE_NET_CALLOUT_ERROR_NOT_INITIALIZED;
-    }
 
     std::lock_guard<std::mutex> guard(this->mutex);
     SceNetAdhocMatchingCalloutFunction *entry = this->functionList;
@@ -135,4 +118,37 @@ int SceNetAdhocMatchingCalloutSyncing::deleteTimedFunction(SceNetAdhocMatchingCa
     }
 
     return SCE_NET_CALLOUT_OK;
+}
+
+int SceNetAdhocMatchingCalloutSyncing::excecuteTimedFunctions() {
+    mutex.lock();
+
+    auto *entry = functionList;
+    uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+
+    while (entry != nullptr && entry->execAt < now) {
+        mutex.unlock();
+        entry->function(entry->args);
+        mutex.lock();
+
+        functionList = entry->next;
+        entry = functionList;
+    }
+
+    if (shouldExit) {
+        mutex.unlock();
+        return 0;
+    }
+
+    uint64_t sleep_time = 0;
+    if (entry != nullptr) {
+        sleep_time = entry->execAt - now;
+    }
+
+    mutex.unlock();
+    return sleep_time;
+}
+
+bool SceNetAdhocMatchingCalloutSyncing::isRunning() const {
+    return !shouldExit;
 }

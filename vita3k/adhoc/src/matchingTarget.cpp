@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2024 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,12 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include "util/log.h"
-#include <adhoc/state.h>
-
-#include <emuenv/state.h>
-#include <net/types.h>
-#include <util/types.h>
+#include "adhoc/matchingTarget.h"
 
 void SceNetAdhocMatchingTarget::setSendDataStatus(SceNetAdhocMatchingSendDataStatus status) {
     if (this->sendDataStatus == status)
@@ -59,6 +54,19 @@ void SceNetAdhocMatchingTarget::setStatus(SceNetAdhocMatchingTargetStatus status
     }
 
     this->status = status;
+}
+
+void SceNetAdhocMatchingTarget::setPipeUids(int read, int write) {
+    this->msgPipeUid[0] = read;
+    this->msgPipeUid[1] = write;
+}
+
+int SceNetAdhocMatchingTarget::getReadPipeUid() const {
+    return this->msgPipeUid[0];
+}
+
+int SceNetAdhocMatchingTarget::getWritePipeUid() const {
+    return this->msgPipeUid[1];
 }
 
 int SceNetAdhocMatchingTarget::setOptMessage(SceSize optLen, char *opt) {

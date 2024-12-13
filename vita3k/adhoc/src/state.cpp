@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2024 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+#include <adhoc/matchingContext.h>
 #include <adhoc/state.h>
 
 int AdhocState::initializeMutex() {
@@ -81,7 +82,7 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
 
     // Check for port conflicts
     for (; context != nullptr; context = context->getNext()) {
-         if (context->getPort() != port)
+        if (context->getPort() != port)
             continue;
         return SCE_NET_ADHOC_MATCHING_ERROR_PORT_IN_USE;
     }
@@ -116,7 +117,7 @@ int AdhocState::createMatchingContext(SceUShort16 port) {
         }
 
         matchingCtxCount = next_id;
-        auto* newContext = new SceNetAdhocMatchingContext();
+        auto *newContext = new SceNetAdhocMatchingContext();
 
         if (newContext == nullptr) {
             return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
@@ -145,11 +146,11 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
             previous_ctx->setNext(context->getNext());
             break;
         }
-        
+
         contextList = context->getNext();
         break;
     }
-    
+
     if (ctx != nullptr) {
         delete ctx;
         ctx = nullptr;

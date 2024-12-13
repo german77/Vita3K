@@ -15,14 +15,17 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include "module/module.h"
-#include <kernel/state.h>
+#include <mutex>
+
+#include "adhoc/calloutSyncing.h"
+#include "adhoc/matchingContext.h"
+#include "adhoc/matchingTarget.h"
+#include "adhoc/state.h"
+#include "adhoc/threads.h"
+#include "net/types.h"
+#include "util/log.h"
 
 #include "../SceNet/SceNet.h"
-#include <adhoc/state.h>
-#include <chrono>
-#include <mutex>
-#include <net/types.h>
 
 int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
@@ -111,44 +114,20 @@ int adhocMatchingCalloutThread(EmuEnvState &emuenv, SceUID id) {
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
     auto &calloutSyncing = ctx->getCalloutSyncing();
 
-    do {
-        calloutSyncing.mutex.lock();
-
-        auto *entry = calloutSyncing.functionList;
-        uint64_t now = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
-
-        while (entry != nullptr && entry->execAt < now) {
-            calloutSyncing.mutex.unlock();
-            entry->function(entry->args);
-            calloutSyncing.mutex.lock();
-
-            calloutSyncing.functionList = entry->next;
-            entry = calloutSyncing.functionList;
-        }
-
-        if (calloutSyncing.shouldExit) {
-            calloutSyncing.mutex.unlock();
-            break;
-        }
-
-        uint64_t sleep_time = 0;
-        if (entry != nullptr) {
-            sleep_time = entry->execAt - now;
-        }
-
-        calloutSyncing.mutex.unlock();
+    while (calloutSyncing.isRunning()) {
+        int sleepTime = calloutSyncing.excecuteTimedFunctions();
 
         // Limit sleep time to something reasonable
-        if (sleep_time <= 0) {
-            sleep_time = 1;
+        if (sleepTime <= 0) {
+            sleepTime = 1;
         }
-        if (sleep_time > 500) {
-            sleep_time = 500;
+        if (sleepTime > 500) {
+            sleepTime = 500;
         }
 
         // TODO use ctx->calloutSyncing.condvar to break from this sleep early
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
-    } while (calloutSyncing.shouldExit == false);
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleepTime));
+    }
 
     return 0;
 };

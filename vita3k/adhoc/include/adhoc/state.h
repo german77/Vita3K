@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2023 Vita3K team
+// Copyright (C) 2024 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,15 +17,11 @@
 
 #pragma once
 
-#include "util/types.h"
-#include <condition_variable>
-#include <module/module.h>
-
-#include <kernel/callback.h>
-#include <mem/util.h>
 #include <mutex>
-#include <net/state.h>
-#include <vector>
+
+#include "mem/util.h"
+#include "module/module.h"
+#include "util/types.h"
 
 #define SCE_NET_ADHOC_DEFAULT_PORT 0xe4a
 #define SCE_NET_ADHOC_MATCHING_MAXNUM 16
@@ -33,28 +29,8 @@
 #define SCE_NET_ADHOC_MATCHING_MAXDATALEN 9204
 #define SCE_NET_ADHOC_MATCHING_MAXHELLOOPTLEN 1426
 
+struct SceNetInAddr;
 DECL_EXPORT(SceInt32, sceNetCtlAdhocGetInAddr, SceNetInAddr *inaddr);
-
-int sendHelloReqToPipe(void *arg);
-int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id);
-int adhocMatchingInputThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id);
-int adhocMatchingCalloutThread(EmuEnvState &emuenv, SceUID id);
-
-int registerTargetTimeoutCallback(void *args);
-int targetTimeoutCallback(void *args);
-int sendDataTimeoutCallback(void *args);
-int pipeHelloCallback(void *args);
-
-typedef Address SceNetAdhocMatchingHandler;
-
-struct SceNetAdhocHandlerArguments {
-    uint32_t id;
-    uint32_t event;
-    Address peer;
-    uint32_t optlen;
-    Address opt;
-};
-static_assert(sizeof(SceNetAdhocHandlerArguments) == 0x14, "SceNetAdhocHandlerArguments is an invalid size");
 
 enum SceNetAdhocMatchingErrorCode {
     SCE_NET_ADHOC_MATCHING_OK = 0x0,
@@ -85,13 +61,6 @@ enum SceNetAdhocMatchingErrorCode {
     SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ALIGNMENT = 0x80413119
 };
 
-enum SceNetCalloutErrorCode {
-    SCE_NET_CALLOUT_OK = 0x0,
-    SCE_NET_CALLOUT_ERROR_NOT_INITIALIZED = 0x80558001,
-    SCE_NET_CALLOUT_ERROR_NOT_TERMINATED = 0x80558002,
-    SCE_NET_CALLOUT_ERROR_DUPLICATED = 0x80558006,
-};
-
 enum SceNetAdhocMatchingMode : uint8_t {
     SCE_NET_ADHOC_MATCHING_MODE_PARENT = 1,
     SCE_NET_ADHOC_MATCHING_MODE_CHILD,
@@ -115,20 +84,6 @@ enum SceNetAdhocMatchingHandlerEventType {
     SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_TIMEOUT = 13
 };
 
-enum SceNetAdhocMatchingPacketType : uint8_t {
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO = 1,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK = 2,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3 = 3,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK4 = 4,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL = 5,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_MEMBER_LIST = 6,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_MEMBER_LIST_ACK = 7,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_BYE = 8,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9 = 9,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_DATA = 10,
-    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_DATA_ACK = 11
-};
-
 enum SceNetAdhocMatchingEvent : uint32_t {
     SCE_NET_ADHOC_MATCHING_EVENT_ABORT = 0,
     SCE_NET_ADHOC_MATCHING_EVENT_PACKET = 1,
@@ -138,417 +93,24 @@ enum SceNetAdhocMatchingEvent : uint32_t {
     SCE_NET_ADHOC_MATCHING_EVENT_DATA_TIMEOUT = 5,
 };
 
-enum SceNetAdhocMatchingTargetStatus : uint32_t {
-    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED = 1,
-    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_2 = 2,
-    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES = 3,
-    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2 = 4,
-    SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED = 5,
+struct SceNetAdhocHandlerArguments {
+    uint32_t id;
+    uint32_t event;
+    Address peer;
+    uint32_t optlen;
+    Address opt;
 };
+static_assert(sizeof(SceNetAdhocHandlerArguments) == 0x14, "SceNetAdhocHandlerArguments is an invalid size");
 
-enum SceNetAdhocMatchingContextStatus {
-    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING = 0,
-    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_STOPPING = 1,
-    SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_RUNNING = 2,
-};
-
-enum SceNetAdhocMatchingSendDataStatus {
-    SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY = 1,
-    SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_BUSY = 2,
-};
-
-struct SceNetAdhocMatchingMessageHeader {
-    uint8_t one; //! ALWAYS 1
-    SceNetAdhocMatchingPacketType type;
-    SceUShort16 packetLength;
-
-    std::vector<char> serialize() const {
-        std::vector<char> data(sizeof(SceNetAdhocMatchingMessageHeader));
-        const SceUShort16 nPacketLength = htons(packetLength);
-
-        memcpy(data.data(), &one, sizeof(uint8_t));
-        memcpy(data.data() + 0x1, &type, sizeof(SceNetAdhocMatchingPacketType));
-        memcpy(data.data() + 0x2, &nPacketLength, sizeof(SceUShort16));
-        return data;
-    }
-
-    void parse(char *data, SceSize dataLen) {
-        assert(dataLen >= sizeof(SceNetAdhocMatchingMessageHeader));
-
-        memcpy(&one, data, sizeof(uint8_t));
-        memcpy(&type, data + 0x1, sizeof(SceNetAdhocMatchingPacketType));
-        memcpy(&packetLength, data + 0x2, sizeof(SceUShort16));
-        packetLength = htons(packetLength);
-    }
-};
-static_assert(sizeof(SceNetAdhocMatchingMessageHeader) == 0x4, "SceNetAdhocMatchingMessageHeader is an invalid size");
-
-struct SceNetAdhocMatchingDataMessage {
-    SceNetAdhocMatchingMessageHeader header;
-    SceUID targetId;
-    SceUID packetId;
-    std::vector<char> dataBuffer;
-
-    std::size_t messageSize() const {
-        return sizeof(header) + dataBuffer.size() + 0x8;
-    }
-
-    std::vector<char> serialize() const {
-        std::vector<char> data = header.serialize();
-        data.resize(messageSize());
-
-        const SceUID ntargetId = htonl(targetId);
-        const int nPacketId = htonl(packetId);
-        memcpy(data.data() + sizeof(header), &ntargetId, sizeof(SceUID));
-        memcpy(data.data() + sizeof(header) + 0x4, &nPacketId, sizeof(SceUID));
-        memcpy(data.data() + sizeof(header) + 0x8, dataBuffer.data(), dataBuffer.size());
-        return data;
-    }
-
-    void parse(char *data, SceSize dataLen) {
-        assert(dataLen >= sizeof(header) + 0x8);
-        dataBuffer.resize(dataLen - sizeof(header) - 0x8);
-
-        header.parse(data, dataLen);
-        memcpy(dataBuffer.data(), data + sizeof(header), dataBuffer.size());
-        memcpy(&targetId, data + sizeof(header), sizeof(SceUID));
-        memcpy(&packetId, data + sizeof(header) + 0x4, sizeof(SceUID));
-        memcpy(dataBuffer.data(), data + sizeof(header) + 0x8, dataBuffer.size());
-        targetId = htonl(targetId);
-        packetId = htonl(packetId);
-    }
-};
-
-struct SceNetAdhocMatchingOptMessage {
-    SceNetAdhocMatchingMessageHeader header;
-    std::vector<char> dataBuffer;
-    int targetCount;
-    char zero[0xc];
-
-    std::size_t messageSize() const {
-        return sizeof(header) + dataBuffer.size() + 0x10;
-    }
-
-    std::vector<char> serialize() const {
-        std::vector<char> data = header.serialize();
-        data.resize(messageSize());
-
-        const int nTargetCount = htonl(targetCount);
-        memcpy(data.data() + sizeof(header), dataBuffer.data(), dataBuffer.size());
-        memcpy(data.data() + sizeof(header) + dataBuffer.size(), &nTargetCount, sizeof(int));
-        memcpy(data.data() + sizeof(header) + dataBuffer.size() + 0x4, &zero, sizeof(0xc));
-        return data;
-    }
-
-    void parse(char *data, SceSize dataLen) {
-        assert(dataLen >= sizeof(header));
-        dataBuffer.resize(dataLen - sizeof(header) - 0x10);
-
-        header.parse(data, dataLen);
-        memcpy(dataBuffer.data(), data + sizeof(header), dataBuffer.size());
-        memcpy(&targetCount, data + sizeof(header) + dataBuffer.size(), sizeof(int));
-        memcpy(&zero, data + sizeof(header) + dataBuffer.size() + 0x4, sizeof(0xc));
-        targetCount = htonl(targetCount);
-    }
-};
-
-struct SceNetAdhocMatchingHelloMessage {
-    SceNetAdhocMatchingMessageHeader header;
-    int helloInterval;
-    int rexmtInterval;
-    std::vector<char> optBuffer;
-    bool unk_6c;
-    std::array<char, 0xf> padding;
-
-    std::size_t messageSize() const {
-        return sizeof(header) + optBuffer.size() + 0x18;
-    }
-
-    std::vector<char> serialize() const {
-        std::vector<char> data = header.serialize();
-        data.resize(messageSize());
-
-        const int nhelloInterval = htonl(helloInterval);
-        const int nrexmtInterval = htonl(rexmtInterval);
-        memcpy(data.data() + sizeof(header), &nhelloInterval, sizeof(int));
-        memcpy(data.data() + sizeof(header) + 0x4, &nrexmtInterval, sizeof(int));
-        memcpy(data.data() + sizeof(header) + 0x8, optBuffer.data(), optBuffer.size());
-        memcpy(data.data() + sizeof(header) + 0x8 + optBuffer.size(), &unk_6c, sizeof(bool));
-        memcpy(data.data() + sizeof(header) + 0x9 + optBuffer.size(), padding.data(), sizeof(0xf));
-        return data;
-    }
-
-    void parse(char *data, SceSize dataLen) {
-        assert(dataLen >= sizeof(header) + 0x8);
-        optBuffer.resize(dataLen - sizeof(header) - 0x18);
-
-        header.parse(data, dataLen);
-        memcpy(&helloInterval, data + sizeof(header), sizeof(int));
-        memcpy(&rexmtInterval, data + sizeof(header) + 0x4, sizeof(int));
-        memcpy(optBuffer.data(), data + sizeof(header) + 0x8, optBuffer.size());
-        memcpy(&unk_6c, data + sizeof(header) + 0x8 + optBuffer.size(), sizeof(bool));
-        memcpy(padding.data(), data + sizeof(header) + 0x9 + optBuffer.size(), sizeof(0xf));
-        helloInterval = htonl(helloInterval);
-        rexmtInterval = htonl(rexmtInterval);
-    }
-};
-
-struct SceNetAdhocMatchingMemberMessage {
-    SceNetAdhocMatchingMessageHeader header;
-    SceNetInAddr parent;
-    std::vector<SceNetInAddr> members;
-
-    std::size_t messageSize() const {
-        const std::size_t memberSize = members.size() * sizeof(SceNetInAddr);
-        return sizeof(header) + sizeof(parent) + memberSize;
-    }
-
-    std::vector<char> serialize() const {
-        std::vector<char> data = header.serialize();
-        data.resize(messageSize());
-        memcpy(data.data() + sizeof(header), &parent, sizeof(SceNetInAddr));
-        memcpy(data.data() + sizeof(header) + sizeof(parent), members.data(), members.size() * sizeof(SceNetInAddr));
-        return data;
-    }
-
-    void parse(char *data, SceSize dataLen) {
-        assert(dataLen >= sizeof(header) + sizeof(parent));
-        assert(dataLen % 4 == 0);
-
-        const std::size_t entries = (dataLen / sizeof(SceNetInAddr)) - 2;
-        members.resize(entries);
-        header.parse(data, dataLen);
-        memcpy(&parent, data + sizeof(header), sizeof(SceNetInAddr));
-        memcpy(members.data(), data + sizeof(header) + sizeof(parent), entries * sizeof(SceNetInAddr));
-    }
-};
-
-struct SceNetAdhocMatchingTarget;
+class SceNetAdhocMatchingContext;
+class SceNetAdhocMatchingTarget;
 
 struct SceNetAdhocMatchingPipeMessage {
     SceNetAdhocMatchingEvent type;
     SceNetAdhocMatchingTarget *target;
     bool isSheduled;
 };
-
-struct SceNetAdhocMatchingMember {
-    SceNetInAddr addr;
-};
-static_assert(sizeof(SceNetAdhocMatchingMember) == 0x4, "SceNetAdhocMatchingMember is an invalid size");
-
-struct SceNetAdhocMatchingCalloutFunction {
-    SceNetAdhocMatchingCalloutFunction *next;
-    uint64_t execAt;
-    int (*function)(void *);
-    void *args;
-};
-
-struct SceNetAdhocMatchingAckTimeout {
-    SceNetAdhocMatchingPipeMessage message;
-    bool isAckPending;
-    int retryCount;
-};
-
-class SceNetAdhocMatchingTarget {
-public:
-    void setStatus(SceNetAdhocMatchingTargetStatus status);
-    void setSendDataStatus(SceNetAdhocMatchingSendDataStatus status);
-
-    int setOptMessage(SceSize optLen, char *opt);
-    SceSize getOptLen() const;
-    char *getOpt() const;
-    void deleteOptMessage();
-
-    int setRawPacket(SceSize rawPacketLen, SceSize packetLen, char *packet);
-    SceSize getRawPacketLen() const;
-    SceSize getPacketLen() const;
-    char *getRawPacket() const;
-    SceNetAdhocMatchingMessageHeader getPacketHeader() const;
-    void deleteRawPacket();
-
-    SceNetAdhocMatchingTarget *next;
-    SceNetAdhocMatchingTargetStatus status;
-    SceNetInAddr addr;
-    int unk_0c;
-    SceSize keepAliveInterval;
-
-    SceNetAdhocMatchingPipeMessage incomingPacketMessage;
-    int retryCount;
-    int msgPipeUid[2]; // 0 = read, 1 = write
-
-    int unk_50;
-    bool delete_target;
-    int targetCount;
-    SceUID uid;
-
-    SceSize sendDataCount;
-    SceSize recvDataCount;
-    SceNetAdhocMatchingSendDataStatus sendDataStatus;
-    char *sendData;
-
-    SceNetAdhocMatchingAckTimeout targetTimeout;
-    SceNetAdhocMatchingAckTimeout sendDataTimeout;
-
-    SceNetAdhocMatchingCalloutFunction targetTimeoutFunction;
-    SceNetAdhocMatchingCalloutFunction sendDataTimeoutFunction;
-
-private:
-    SceSize optLength = 0;
-    char *opt = nullptr;
-
-    SceSize packetLength = 0;
-    SceSize rawPacketLength = 0;
-    char *packet = nullptr;
-};
-
-struct SceNetAdhocMatchingCalloutSyncing {
-    int initializeCalloutThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
-    void closeCalloutThread();
-
-    int addTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, SceLong64 interval, int (*function)(void *), void *args);
-    int deleteTimedFunction(SceNetAdhocMatchingCalloutFunction *calloutFunction, bool *is_deleted = nullptr);
-
-    std::thread calloutThread;
-    std::mutex mutex;
-    std::condition_variable condvar;
-    bool isInitialized;
-    bool shouldExit;
-    SceNetAdhocMatchingCalloutFunction *functionList;
-};
-
-class SceNetAdhocMatchingContext {
-public:
-    int initialize(SceNetAdhocMatchingMode mode, int maxnum, SceUShort16 port, int rxbuflen, unsigned int helloInterval, unsigned int keepaliveInterval, int retryCount, unsigned int rexmtInterval, Ptr<void> handlerAddr);
-    void finalize();
-
-    int start(EmuEnvState &emuenv, SceUID thread_id, int threadPriority, int threadStackSize, int threadCpuAffinityMask, SceSize helloOptLen, char *helloOpt);
-    int stop(EmuEnvState &emuenv, SceUID thread_id);
-
-    int initializeInputThread(EmuEnvState &emuenv, SceUID thread_id, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
-    void closeInputThread(EmuEnvState &emuenv, SceUID thread_id);
-
-    int initializeEventHandler(EmuEnvState &emuenv, SceUID thread_id, int threadPriority, int threadStackSize, int threadCpuAffinityMask);
-    void closeEventHandler();
-
-    int initializeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
-    void closeSendSocket(EmuEnvState &emuenv, SceUID thread_id);
-
-    SceNetAdhocMatchingContext *getNext();
-    void setNext(SceNetAdhocMatchingContext *next_context);
-
-    SceUID getId() const;
-    void setId(SceUID id);
-
-    SceUShort16 getPort() const;
-    SceNetAdhocMatchingContextStatus getStatus() const;
-    SceNetAdhocMatchingMode getMode() const;
-    SceNetAdhocMatchingCalloutSyncing &getCalloutSyncing();
-    SceNetAdhocMatchingTarget *findTargetByAddr(SceNetInAddr *addr) const;
-    int getReadPipeUid() const;
-    int getWritePipeUid() const;
-
-    int getMembers(SceSize &outMembersNum, SceNetAdhocMatchingMember *outMembers) const;
-    int getHelloOpt(SceSize &outOptlen, void *outOpt) const;
-    int setHelloOpt(SceSize optlen, void *opt);
-    void deleteTarget(SceNetAdhocMatchingTarget *target);
-
-    void abortSendData(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    int cancelTargetWithOpt(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target, SceSize optLen, char *opt);
-    int selectTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target, SceSize optLen, char *opt);
-    int sendData(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target, SceSize dateLen, char *data);
-
-    void handleEventMessage(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
-    void handleEventRegistrationTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
-    void handleEventTargetTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
-    void handleEventHelloTimeout(EmuEnvState &emuenv, SceUID thread_id);
-    void handleEventDataTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
-    void handleIncommingPackage(SceNetInAddr *addr, SceSize rawPacketLen, SceSize packetLength);
-
-public:
-    SceNetAdhocMatchingPipeMessage helloPipeMsg;
-    bool shouldHelloReqBeProcessed;
-
-    int sendSocket;
-    int recvSocket;
-
-    int rxbuflen;
-    char *rxbuf;
-
-    uint32_t ownAddress;
-    uint16_t ownPort;
-
-private:
-    void processPacketFromTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
-
-    int processMemberListPacket(char *packet, SceSize packetLength);
-    int processDataPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
-    int processDataAckPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
-
-    // Target
-    void setTargetStatus(SceNetAdhocMatchingTarget &target, SceNetAdhocMatchingTargetStatus status);
-    SceNetAdhocMatchingTarget *newTarget(SceNetInAddr *addr);
-    void getMemberList(SceNetAdhocMatchingTargetStatus status, SceNetInAddr *addrList, SceSize &addrListSize) const;
-    SceSize countTargetsWithStatusOrBetter(SceNetAdhocMatchingTargetStatus status) const;
-    bool isTargetAddressHigher(SceNetAdhocMatchingTarget &target) const;
-    void deleteAllTargets(EmuEnvState &emuenv, SceUID thread_id);
-
-    // Member list message
-    int createMembersList();
-    void deleteMemberList();
-
-    // Hello optional data
-    void deleteHelloMessage();
-
-    void addHelloTimedFunct(EmuEnvState &emuenv, uint64_t time_interval);
-    void addSendDataTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void addRegisterTargetTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void addTargetTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void deleteHelloTimedFunction(EmuEnvState &emuenv);
-    void deleteSendDataTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-
-    void notifyHandler(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingHandlerEventType type, SceNetInAddr *peer, SceSize optLen = 0, void *opt = nullptr);
-
-    uint32_t getTargetAddr(const SceNetAdhocMatchingTarget &target);
-    int sendMemberListToTarget(EmuEnvState &emuenv, SceUID thread_id, const SceNetAdhocMatchingTarget &target);
-    int sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, const SceNetAdhocMatchingTarget &target, SceNetAdhocMatchingPacketType type, int datalen = 0, char *data = nullptr);
-    int sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, const SceNetAdhocMatchingTarget &target, SceNetAdhocMatchingPacketType type, int optlen = 0, char *opt = nullptr);
-
-    uint32_t getBroadcastAddr();
-    int broadcastHello(EmuEnvState &emuenv, SceUID thread_id);
-    int broadcastBye(EmuEnvState &emuenv, SceUID thread_id);
-
-    SceNetAdhocMatchingContext *next = nullptr;
-    SceUID id;
-    SceNetAdhocMatchingContextStatus status = SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING;
-    SceNetAdhocMatchingMode mode;
-    int maxnum;
-    SceUShort16 port;
-
-    unsigned int helloInterval;
-    unsigned int keepAliveInterval;
-    unsigned int retryCount;
-    unsigned int rexmtInterval;
-
-    SceNetAdhocMatchingHandler handler;
-
-    std::thread eventThread;
-    std::thread inputThread;
-    SceUID event_thread_id;
-    SceUID input_thread_id;
-
-    int msgPipeUid[2]; // 0 = read, 1 = write
-
-    SceNetAdhocMatchingHelloMessage *helloMsg;
-    SceNetAdhocMatchingMemberMessage *memberMsg;
-
-    int helloOptionFlag;
-
-    SceNetAdhocMatchingTarget *targetList;
-
-    SceNetAdhocMatchingCalloutSyncing calloutSyncing;
-    SceNetAdhocMatchingCalloutFunction helloTimedFunction;
-};
+typedef Address SceNetAdhocMatchingHandler;
 
 class AdhocState {
 public:

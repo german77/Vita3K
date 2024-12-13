@@ -19,8 +19,8 @@
 #include <module/module.h>
 
 #include <adhoc/state.h>
-#include <kernel/state.h>
-#include <util/lock_and_find.h>
+#include <adhoc/matchingContext.h>
+#include <adhoc/matchingTarget.h>
 
 #include <util/tracy.h>
 TRACY_MODULE_NAME(SceNetAdhocMatching);
