@@ -47,7 +47,7 @@ EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
 
-    ctx->abortSendData(emuenv, *target);
+    ctx->abortSendData(*target);
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }

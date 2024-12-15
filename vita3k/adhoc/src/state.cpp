@@ -18,10 +18,15 @@
 #include <adhoc/matchingContext.h>
 #include <adhoc/state.h>
 
+AdhocState::~AdhocState() {
+    deleteAllMatchingContext();
+    deleteMutex();
+    deleteMSpace();
+}
+
 int AdhocState::initializeMutex() {
     // Initialize mutex
     is_mutex_initialized = true;
-    FrameMarkNamed("Adhoc");
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -30,7 +35,6 @@ int AdhocState::deleteMutex() {
         // Delete mutex
     }
     is_mutex_initialized = false;
-    FrameMarkNamed("Adhoc");
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -44,7 +48,6 @@ int AdhocState::createMSpace(SceSize poolsize, void *poolptr) {
 }
 
 int AdhocState::deleteMSpace() {
-    tracy::SetThreadName("deleteMSpace");
     // Just a placeholder. We don't really need this kind of allocation
     return SCE_NET_ADHOC_MATCHING_OK;
 }

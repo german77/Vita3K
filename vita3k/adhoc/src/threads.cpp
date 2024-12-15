@@ -31,12 +31,16 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
     auto ctx = emuenv.adhoc.findMatchingContextById(id);
 
     SceNetAdhocMatchingPipeMessage pipeMessage;
-    while (read(ctx->getReadPipeUid(), &pipeMessage, sizeof(pipeMessage)) >= 0) {
+    while (ctx->isRunning()) {
+        if (read(ctx->getReadPipeUid(), &pipeMessage, sizeof(pipeMessage)) < 0)
+            return 0;
+
         std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
         LOG_INFO("event: {}", (int)pipeMessage.type);
 
         switch (pipeMessage.type) {
         case SCE_NET_ADHOC_MATCHING_EVENT_ABORT:
+            ctx->broadcastAbort(emuenv, thread_id);
             return 0;
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET:
             ctx->handleEventMessage(emuenv, thread_id, pipeMessage.target);
@@ -73,12 +77,12 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
     SceNetSockaddrIn fromAddr{};
     unsigned int fromAddrLen = sizeof(SceNetSockaddrIn);
 
-    while (true) {
+    while (ctx->isRunning()) {
         int rawPacketSize;
         SceNetAdhocMatchingMessageHeader packet;
 
         // Wait until valid data arrives
-        while (true) {
+        while (ctx->isRunning()) {
             rawPacketSize = CALL_EXPORT(sceNetRecvfrom, ctx->recvSocket, ctx->rxbuf, ctx->rxbuflen, 0, (SceNetSockaddr *)&fromAddr, &fromAddrLen);
             if (rawPacketSize < SCE_NET_ADHOC_MATCHING_OK)
                 return 0;
@@ -93,6 +97,9 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             if (rawPacketSize >= packet.packetLength + sizeof(SceNetAdhocMatchingMessageHeader))
                 break;
         }
+
+        if (!ctx->isRunning())
+            return 0;
 
         uint8_t addr[4];
         memcpy(addr, &fromAddr.sin_addr.s_addr, 4);
@@ -121,8 +128,8 @@ int adhocMatchingCalloutThread(EmuEnvState &emuenv, SceUID id) {
         if (sleepTime <= 0) {
             sleepTime = 1;
         }
-        if (sleepTime > 500) {
-            sleepTime = 500;
+        if (sleepTime > 50) {
+            sleepTime = 50;
         }
 
         // TODO use ctx->calloutSyncing.condvar to break from this sleep early

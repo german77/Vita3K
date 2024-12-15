@@ -523,7 +523,7 @@ EXPORT(int, sceNetSetDnsInfo) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceNetSetsockopt, int sid, SceNetProtocol level, SceNetSocketOption optname, const int *optval, unsigned int optlen) {
+EXPORT(int, sceNetSetsockopt, int sid, SceNetProtocol level, SceNetSocketOption optname, const char *optval, unsigned int optlen) {
     TRACY_FUNC(sceNetSetsockopt, sid, level, optname, *optval, optlen);
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
@@ -598,7 +598,7 @@ EXPORT(int, sceNetSocketAbort, int sid) {
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
     }
-    return sock->shutdown_socket(2);
+    return sock->shutdown_socket(SD_BOTH);
 }
 
 EXPORT(int, sceNetSocketClose, int sid) {

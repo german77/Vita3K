@@ -222,6 +222,8 @@ struct SceNetAdhocMatchingMemberMessage {
 
 class SceNetAdhocMatchingContext {
 public:
+    ~SceNetAdhocMatchingContext();
+
     int initialize(SceNetAdhocMatchingMode mode, int maxnum, SceUShort16 port, int rxbuflen, unsigned int helloInterval, unsigned int keepaliveInterval, int retryCount, unsigned int rexmtInterval, Ptr<void> handlerAddr);
     void finalize();
 
@@ -243,6 +245,7 @@ public:
     SceUID getId() const;
     void setId(SceUID id);
 
+    bool isRunning() const;
     SceUShort16 getPort() const;
     SceNetAdhocMatchingContextStatus getStatus() const;
     SceNetAdhocMatchingMode getMode() const;
@@ -256,7 +259,7 @@ public:
     int setHelloOpt(SceSize optlen, void *opt);
     void deleteTarget(SceNetAdhocMatchingTarget *target);
 
-    void abortSendData(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
+    void abortSendData(SceNetAdhocMatchingTarget &target);
     int cancelTargetWithOpt(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target, SceSize optLen, char *opt);
     int selectTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target, SceSize optLen, char *opt);
     int sendData(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target, SceSize dateLen, char *data);
@@ -267,6 +270,8 @@ public:
     void handleEventHelloTimeout(EmuEnvState &emuenv, SceUID thread_id);
     void handleEventDataTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
     void handleIncommingPackage(SceNetInAddr *addr, SceSize rawPacketLen, SceSize packetLength);
+
+    int broadcastAbort(EmuEnvState &emuenv, SceUID thread_id);
 
 public:
     SceNetAdhocMatchingPipeMessage helloPipeMsg;
@@ -310,13 +315,13 @@ private:
     void deleteHelloMessage();
 
     // Timed functions
-    void addHelloTimedFunct(EmuEnvState &emuenv, uint64_t time_interval);
-    void addSendDataTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void addRegisterTargetTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void addTargetTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void deleteHelloTimedFunction(EmuEnvState &emuenv);
-    void deleteSendDataTimeout(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
-    void deleteAllTimedFunctions(EmuEnvState &emuenv, SceNetAdhocMatchingTarget &target);
+    void addHelloTimedFunct(uint64_t time_interval);
+    void addSendDataTimeout(SceNetAdhocMatchingTarget &target);
+    void addRegisterTargetTimeout(SceNetAdhocMatchingTarget &target);
+    void addTargetTimeout(SceNetAdhocMatchingTarget &target);
+    void deleteHelloTimedFunction();
+    void deleteSendDataTimeout(SceNetAdhocMatchingTarget &target);
+    void deleteAllTimedFunctions(SceNetAdhocMatchingTarget &target);
 
     void notifyHandler(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingHandlerEventType type, SceNetInAddr *peer, SceSize optLen = 0, void *opt = nullptr);
 
@@ -344,6 +349,9 @@ private:
 
     SceNetAdhocMatchingHandler handler;
 
+    bool shouldExit;
+    bool isEventThreadInitialized;
+    bool isInputThreadInitialized;
     std::thread eventThread;
     std::thread inputThread;
     SceUID event_thread_id;

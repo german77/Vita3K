@@ -114,6 +114,8 @@ typedef Address SceNetAdhocMatchingHandler;
 
 class AdhocState {
 public:
+    ~AdhocState();
+
     int initializeMutex();
     int deleteMutex();
     std::mutex &getMutex();

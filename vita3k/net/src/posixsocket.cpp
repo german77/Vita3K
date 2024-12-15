@@ -143,15 +143,6 @@ static void convertPosixSockaddrToSce(sockaddr *src, SceNetSockaddr *dst) {
     memcpy(&dst_in->sin_addr, &src_in->sin_addr, 4);
 }
 
-static void convertSceFlagsToPosix(const int flags, int* outFlags) {
-    if (outFlags == nullptr)
-        return;
-    *outFlags = 0;
-    if ((flags & 0x400) != 0) {
-        *outFlags |= MSG_DONTROUTE;
-    }
-}
-
 int PosixSocket::connect(const SceNetSockaddr *addr, unsigned int namelen) {
     sockaddr addr2;
     convertSceSockaddrToPosix(addr, &addr2);
@@ -365,50 +356,46 @@ int PosixSocket::get_socket_options(int level, int optname, void *optval, unsign
 }
 
 int PosixSocket::recv_packet(void *buf, unsigned int len, int flags, SceNetSockaddr *from, unsigned int *fromlen) {
-    int posix_flags;
-    convertSceFlagsToPosix(flags, &posix_flags);
-    if (from != nullptr) {
-        sockaddr addr;
-        int res = recvfrom(sock, (char *)buf, len, posix_flags, &addr, (socklen_t *)fromlen);
-        convertPosixSockaddrToSce(&addr, from);
-        if (res >= 0) {
-            std::string data = "";
-            for (std::size_t i = 0; i < res; i++) {
-                data = fmt::format("{} {:x}", data, ((uint8_t *)buf)[i]);
-            }
-            sockaddr_in *inaddr = (sockaddr_in *)&addr;
-
-            uint8_t addrr[4];
-            memcpy(addrr, &inaddr->sin_addr, 4);
-            LOG_INFO("recvfrom {} {} {} {} {} {}.{}.{}.{}:{} {}, data:{}", sock, len, flags, res, inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), *fromlen, data);
-        }
-        return translate_return_value(res);
-    } else {
-        return translate_return_value(recv(sock, (char *)buf, len, posix_flags));
+    if (from == nullptr) {
+        return translate_return_value(recv(sock, (char *)buf, len, 0));
     }
+
+    sockaddr addr;
+    int res = recvfrom(sock, (char *)buf, len, 0, &addr, (socklen_t *)fromlen);
+    convertPosixSockaddrToSce(&addr, from);
+    if (res >= 0) {
+        std::string data = "";
+        for (std::size_t i = 0; i < res; i++) {
+            data = fmt::format("{} {:x}", data, ((uint8_t *)buf)[i]);
+        }
+        sockaddr_in *inaddr = (sockaddr_in *)&addr;
+
+        uint8_t addrr[4];
+        memcpy(addrr, &inaddr->sin_addr, 4);
+        LOG_INFO("recvfrom {} {} {} {} {} {}.{}.{}.{}:{} {}, data:{}", sock, len, flags, res, inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), *fromlen, data);
+    }
+    return translate_return_value(res);
 }
 
 int PosixSocket::send_packet(const void *msg, unsigned int len, int flags, const SceNetSockaddr *to, unsigned int tolen) {
-    int posix_flags;
-    convertSceFlagsToPosix(flags, &posix_flags);
-    if (to != nullptr) {
-        sockaddr addr;
-        convertSceSockaddrToPosix(to, &addr);
-        int result = translate_return_value(sendto(sock, (const char *)msg, len, posix_flags, &addr, sizeof(sockaddr_in)));
-
-        if (result >= 0) {
-            sockaddr_in *inaddr = (sockaddr_in *)&addr;
-            std::string data = "";
-            for (std::size_t i = 0; i < len; i++) {
-                data = fmt::format("{} {:x}", data, ((uint8_t *)msg)[i]);
-            }
-            uint8_t addrr[4];
-            memcpy(addrr, &inaddr->sin_addr, 4);
-
-            LOG_ERROR("sendto {} {} {} {} {} {}.{}.{}.{}:{}, data:{}", sock, len, flags, result, inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), data);
-        }
-        return result;
-    } else {
-        return translate_return_value(send(sock, (const char *)msg, len, posix_flags));
+    if (to == nullptr) {
+        return translate_return_value(send(sock, (const char *)msg, len, 0));
     }
+
+    sockaddr addr;
+    convertSceSockaddrToPosix(to, &addr);
+    int result = translate_return_value(sendto(sock, (const char *)msg, len, 0, &addr, sizeof(sockaddr_in)));
+
+    if (result >= 0) {
+        sockaddr_in *inaddr = (sockaddr_in *)&addr;
+        std::string data = "";
+        for (std::size_t i = 0; i < len; i++) {
+            data = fmt::format("{} {:x}", data, ((uint8_t *)msg)[i]);
+        }
+        uint8_t addrr[4];
+        memcpy(addrr, &inaddr->sin_addr, 4);
+
+        LOG_ERROR("sendto {} {} {} {} {} {}.{}.{}.{}:{}, data:{}", sock, len, flags, result, inaddr->sin_family, addrr[0], addrr[1], addrr[2], addrr[3], htons(inaddr->sin_port), data);
+    }
+    return result;
 }
