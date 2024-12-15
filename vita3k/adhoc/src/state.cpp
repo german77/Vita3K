@@ -142,9 +142,6 @@ void AdhocState::deleteMatchingContext(SceNetAdhocMatchingContext *ctx) {
             previous_ctx = context;
             continue;
         }
-        if (matchingCtxCount > 1) {
-            matchingCtxCount--;
-        }
         if (previous_ctx != nullptr) {
             previous_ctx->setNext(context->getNext());
             break;

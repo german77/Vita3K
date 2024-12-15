@@ -172,28 +172,16 @@ int ThreadState::startAdhoc(uint32_t id, uint32_t type, const Ptr<void> peer, Sc
     load_context(*cpu, init_cpu_ctx);
     write_pc(*cpu, entry_point);
     write_lr(*cpu, cpu->halt_instruction_pc);
+
+    Address sp = read_sp(*cpu);
     write_reg(*cpu, 0, id);
     write_reg(*cpu, 1, type);
-
-    // Copy data to stack
-    if (peer) {
-        const Address data_addr = stack_alloc(*cpu, align(4, 8));
-        memcpy(Ptr<uint8_t>(data_addr).get(mem), peer.get(mem), 4);
-        write_reg(*cpu, 2, data_addr);
-    } else {
-        write_reg(*cpu, 2, 0);
-    }
-
+    write_reg(*cpu, 2, peer.address());
     write_reg(*cpu, 3, optLen);
 
-    // Copy data to stack
-    if (opt && optLen > 0) {
-        const Address data_addr = stack_alloc(*cpu, align(optLen, 8));
-        memcpy(Ptr<uint8_t>(data_addr).get(mem), opt.get(mem), optLen);
-        write_reg(*cpu, 4, data_addr);
-    } else {
-        write_reg(*cpu, 4, 0);
-    }
+    sp -= 4;
+    memcpy(Ptr<uint32_t>(sp).get(mem), &opt, 4);
+    write_sp(*cpu, sp);
 
     if (kernel.debugger.wait_for_debugger) {
         to_do = ThreadToDo::suspend;

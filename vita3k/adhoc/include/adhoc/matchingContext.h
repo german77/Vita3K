@@ -30,6 +30,7 @@ class SceNetAdhocMatchingTarget;
 enum SceNetAdhocMatchingTargetStatus : uint32_t;
 
 enum SceNetAdhocMatchingPacketType : uint8_t {
+    SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ABORT = 0,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO = 1,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK = 2,
     SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK3 = 3,

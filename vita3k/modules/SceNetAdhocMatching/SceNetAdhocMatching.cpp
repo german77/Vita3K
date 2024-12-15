@@ -150,6 +150,7 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
 
     ctx->stop(emuenv, thread_id);
 
+    LOG_INFO("sceNetAdhocMatchingStop complete");
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 

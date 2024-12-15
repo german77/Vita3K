@@ -149,6 +149,9 @@ int SceNetAdhocMatchingContext::stop(EmuEnvState &emuenv, SceUID thread_id) {
     closeEventHandler();
     closeInputThread(emuenv, thread_id);
 
+    emuenv.kernel.get_thread(input_thread_id)->exit_delete();
+    emuenv.kernel.get_thread(event_thread_id)->exit_delete();
+
     if (mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || mode == SCE_NET_ADHOC_MATCHING_MODE_P2P) {
         deleteHelloTimedFunction();
         deleteHelloMessage();
@@ -191,11 +194,8 @@ int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUI
         return bindResult;
     }
 
-    if (input_thread_id == 0) {
-        const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
-        this->input_thread_id = thread_id;
-    }
-
+    const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+    this->input_thread_id = input_thread->id;
 
     this->inputThread = std::thread(adhocMatchingInputThread, std::ref(emuenv), this->input_thread_id, this->id);
     isInputThreadInitialized = true;
@@ -265,10 +265,9 @@ int SceNetAdhocMatchingContext::initializeEventHandler(EmuEnvState &emuenv, SceU
     if (pipesResult < SCE_NET_ADHOC_MATCHING_OK) {
         return pipesResult;
     }
-    if (event_thread_id == 0) {
-        const ThreadStatePtr event_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
-        this->event_thread_id = event_thread->id;
-    }
+    const ThreadStatePtr event_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+    this->event_thread_id = event_thread->id;
+
     this->eventThread = std::thread(adhocMatchingEventThread, std::ref(emuenv), this->event_thread_id, this->id);
     isEventThreadInitialized = true;
 
@@ -1233,13 +1232,21 @@ void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID threa
         return;
     }
 
-    Address vPeer = alloc(emuenv.mem, sizeof(SceNetInAddr), "adhocHandlerPeer");
-    Address vOpt = alloc(emuenv.mem, optLen + 1, "adhocHandlerOpt");
+    Address vPeer = 0;
+    Address vOpt = 0;
     if (peer) {
+        vPeer = alloc(emuenv.mem, sizeof(SceNetInAddr), "adhocHandlerPeer");
         memcpy(Ptr<char>(vPeer).get(emuenv.mem), peer, sizeof(SceNetInAddr));
     }
     if (opt) {
+        vOpt = alloc(emuenv.mem, optLen, "adhocHandlerOpt");
         memcpy(Ptr<char>(vOpt).get(emuenv.mem), opt, optLen);
+
+        char* data=new char[optLen + 1];
+
+        memset(data, 0, optLen + 1);
+        memcpy(data, opt, optLen);
+        LOG_INFO("notifyHandler {}", data);
     }
 
     const ThreadStatePtr thread = lock_and_find(thread_id, emuenv.kernel.threads, emuenv.kernel.mutex);
@@ -1416,5 +1423,24 @@ int SceNetAdhocMatchingContext::broadcastBye(EmuEnvState &emuenv, SceUID thread_
 
 int SceNetAdhocMatchingContext::broadcastAbort(EmuEnvState &emuenv, SceUID thread_id) {
     shouldExit = true;
-    return broadcastBye(emuenv, thread_id);
+
+    const SceNetAdhocMatchingMessageHeader abortMsg = {
+        .one = 0,
+        .type = SCE_NET_ADHOC_MATCHING_PACKET_TYPE_ABORT,
+        .packetLength = 0,
+    };
+
+    const SceNetSockaddrIn addr = {
+        .sin_len = sizeof(SceNetSockaddrIn),
+        .sin_family = AF_INET,
+        .sin_port = htons(SCE_NET_ADHOC_DEFAULT_PORT),
+        .sin_addr = ownAddress,
+        .sin_vport = htons(this->port),
+    };
+
+    auto result = CALL_EXPORT(sceNetSendto, this->sendSocket, &abortMsg, sizeof(SceNetAdhocMatchingMessageHeader), 0, (SceNetSockaddr *)&addr, sizeof(SceNetSockaddrIn));
+    if (result == SCE_NET_ERROR_EAGAIN)
+        result = SCE_NET_ADHOC_MATCHING_OK;
+
+    return result;
 }
