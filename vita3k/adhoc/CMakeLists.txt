@@ -7,7 +7,6 @@ add_library(
     include/adhoc/matchingTarget.h
     include/adhoc/state.h
     include/adhoc/threads.h
-
     src/callbacks.cpp
     src/calloutSyncing.cpp
     src/matchingContext.cpp

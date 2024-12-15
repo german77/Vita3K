@@ -116,8 +116,8 @@ int SceNetAdhocMatchingContext::start(EmuEnvState &emuenv, SceUID thread_id, int
 
     result = getCalloutSyncing().initializeCalloutThread(emuenv, thread_id, getId(), threadPriority, 0x1000, threadCpuAffinityMask);
     if (result != SCE_NET_ADHOC_MATCHING_OK) {
-        closeInputThread(emuenv, thread_id);
         closeEventHandler();
+        closeInputThread(emuenv, thread_id);
         closeSendSocket(emuenv, thread_id);
         return result;
     }
@@ -126,8 +126,8 @@ int SceNetAdhocMatchingContext::start(EmuEnvState &emuenv, SceUID thread_id, int
         result = setHelloOpt(helloOptlen, helloOpt);
         if (result != SCE_NET_ADHOC_MATCHING_OK) {
             getCalloutSyncing().closeCalloutThread();
-            closeInputThread(emuenv, thread_id);
             closeEventHandler();
+            closeInputThread(emuenv, thread_id);
             closeSendSocket(emuenv, thread_id);
             return result;
         }
@@ -146,8 +146,8 @@ int SceNetAdhocMatchingContext::stop(EmuEnvState &emuenv, SceUID thread_id) {
 
     // These 3 may take time because they wait for both threads to end
     calloutSyncing.closeCalloutThread();
-    closeInputThread(emuenv, thread_id);
     closeEventHandler();
+    closeInputThread(emuenv, thread_id);
 
     if (mode == SCE_NET_ADHOC_MATCHING_MODE_PARENT || mode == SCE_NET_ADHOC_MATCHING_MODE_P2P) {
         deleteHelloTimedFunction();
@@ -194,14 +194,15 @@ int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUI
     const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
     this->input_thread_id = thread_id;
     this->inputThread = std::thread(adhocMatchingInputThread, std::ref(emuenv), this->input_thread_id, this->id);
-    isEventThreadInitialized = true;
+    isInputThreadInitialized = true;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
 void SceNetAdhocMatchingContext::closeInputThread(EmuEnvState &emuenv, SceUID thread_id) {
-    if (!isEventThreadInitialized)
+    if (!isInputThreadInitialized)
         return;
 
+    shouldExit = true;
     CALL_EXPORT(sceNetSocketAbort, this->recvSocket);
 
     if (this->inputThread.joinable())
@@ -210,7 +211,7 @@ void SceNetAdhocMatchingContext::closeInputThread(EmuEnvState &emuenv, SceUID th
     CALL_EXPORT(sceNetShutdown, this->recvSocket, 0);
     CALL_EXPORT(sceNetSocketClose, this->recvSocket);
     this->recvSocket = 0;
-    isEventThreadInitialized = false;
+    isInputThreadInitialized = false;
 }
 
 int SceNetAdhocMatchingContext::initializeSendSocket(EmuEnvState &emuenv, SceUID thread_id) {

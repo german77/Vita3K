@@ -34,14 +34,15 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
     while (ctx->isRunning()) {
         if (read(ctx->getReadPipeUid(), &pipeMessage, sizeof(pipeMessage)) < 0)
             return 0;
+        if (pipeMessage.type == SCE_NET_ADHOC_MATCHING_EVENT_ABORT) {
+            ctx->broadcastAbort(emuenv, thread_id);
+            return 0;
+        }
 
         std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
         LOG_INFO("event: {}", (int)pipeMessage.type);
 
         switch (pipeMessage.type) {
-        case SCE_NET_ADHOC_MATCHING_EVENT_ABORT:
-            ctx->broadcastAbort(emuenv, thread_id);
-            return 0;
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET:
             ctx->handleEventMessage(emuenv, thread_id, pipeMessage.target);
             break;

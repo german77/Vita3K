@@ -27,6 +27,7 @@ TRACY_MODULE_NAME(SceNetAdhocMatching);
 
 EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
     TRACY_FUNC(sceNetAdhocMatchingAbortSendData, id, addr);
+    LOG_INFO("sceNetAdhocMatchingAbortSendData");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -54,6 +55,7 @@ EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
 
 EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *addr, int optLen, char *opt) {
     TRACY_FUNC(sceNetAdhocMatchingCancelTargetWithOpt, id, addr, optLen, opt);
+    LOG_INFO("sceNetAdhocMatchingCancelTargetWithOpt");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -92,7 +94,8 @@ EXPORT(int, sceNetAdhocMatchingCancelTarget, int id, SceNetInAddr *addr) {
 }
 
 EXPORT(int, sceNetAdhocMatchingCreate, SceNetAdhocMatchingMode mode, int maxnum, SceUShort16 port, int rxbuflen, unsigned int helloInterval, unsigned int keepaliveInterval, int retryCount, unsigned int rexmtInterval, Ptr<void> handlerAddr) {
-    TRACY_FUNC(sceNetAdhocMatchingCreate, mode, maxnum, port, rxbuflen, helloInterval, keepaliveInterval, retryCount, rexmtInterval, handlerAddr)
+    TRACY_FUNC(sceNetAdhocMatchingCreate, mode, maxnum, port, rxbuflen, helloInterval, keepaliveInterval, retryCount, rexmtInterval, handlerAddr);
+    LOG_INFO("sceNetAdhocMatchingCreate");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -131,6 +134,7 @@ EXPORT(int, sceNetAdhocMatchingCreate, SceNetAdhocMatchingMode mode, int maxnum,
 
 EXPORT(int, sceNetAdhocMatchingStop, int id) {
     TRACY_FUNC(sceNetAdhocMatchingStop, id);
+    LOG_INFO("sceNetAdhocMatchingStop");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -151,6 +155,7 @@ EXPORT(int, sceNetAdhocMatchingStop, int id) {
 
 EXPORT(int, sceNetAdhocMatchingDelete, int id) {
     TRACY_FUNC(sceNetAdhocMatchingDelete, id);
+    LOG_INFO("sceNetAdhocMatchingDelete");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -170,6 +175,7 @@ EXPORT(int, sceNetAdhocMatchingDelete, int id) {
 
 EXPORT(int, sceNetAdhocMatchingGetHelloOpt, int id, SceSize *optlen, void *opt) {
     TRACY_FUNC(sceNetAdhocMatchingGetHelloOpt, id, optlen, opt);
+    LOG_INFO("sceNetAdhocMatchingGetHelloOpt");
 
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
@@ -194,6 +200,7 @@ EXPORT(int, sceNetAdhocMatchingGetHelloOpt, int id, SceSize *optlen, void *opt) 
 
 EXPORT(int, sceNetAdhocMatchingGetMembers, int id, unsigned int *membersCount, SceNetAdhocMatchingMember *members) {
     TRACY_FUNC(sceNetAdhocMatchingGetMembers, id, membersCount, members);
+    LOG_INFO("sceNetAdhocMatchingGetMembers");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -214,6 +221,7 @@ EXPORT(int, sceNetAdhocMatchingGetMembers, int id, unsigned int *membersCount, S
 
 EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *addr, int optLen, char *opt) {
     TRACY_FUNC(sceNetAdhocMatchingSelectTarget, id, addr, optLen, opt);
+    LOG_INFO("sceNetAdhocMatchingSelectTarget");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -248,6 +256,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *addr, int opt
 
 EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int dataLen, char *data) {
     TRACY_FUNC(sceNetAdhocMatchingSendData, id, addr, dataLen, data);
+    LOG_INFO("sceNetAdhocMatchingSendData");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -286,6 +295,7 @@ EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int dataLen
 
 EXPORT(int, sceNetAdhocMatchingSetHelloOpt, int id, int optlen, void *opt) {
     TRACY_FUNC(sceNetAdhocMatchingSetHelloOpt, id, optlen, opt);
+    LOG_INFO("sceNetAdhocMatchingSetHelloOpt");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -312,6 +322,7 @@ EXPORT(int, sceNetAdhocMatchingSetHelloOpt, int id, int optlen, void *opt) {
 
 EXPORT(int, sceNetAdhocMatchingStart, int id, int threadPriority, int threadStackSize, int threadCpuAffinityMask, int helloOptlen, char *helloOpt) {
     TRACY_FUNC(sceNetAdhocMatchingStart, id, threadPriority, threadStackSize, threadCpuAffinityMask, helloOptlen, helloOpt);
+    LOG_INFO("sceNetAdhocMatchingStart");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
@@ -346,6 +357,7 @@ EXPORT(int, sceNetAdhocMatchingStart, int id, int threadPriority, int threadStac
 
 EXPORT(int, sceNetAdhocMatchingInit, SceSize poolsize, void *poolptr) {
     TRACY_FUNC(sceNetAdhocMatchingInit, poolsize, poolptr);
+    LOG_INFO("sceNetAdhocMatchingInit");
     if (emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_ALREADY_INITIALIZED);
 
@@ -380,6 +392,7 @@ EXPORT(int, sceNetAdhocMatchingInit, SceSize poolsize, void *poolptr) {
 
 EXPORT(int, sceNetAdhocMatchingTerm) {
     TRACY_FUNC(sceNetAdhocMatchingTerm);
+    LOG_INFO("sceNetAdhocMatchingTerm");
     if (!emuenv.adhoc.is_initialized)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_INITIALIZED);
 
