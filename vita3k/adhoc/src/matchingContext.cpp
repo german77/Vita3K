@@ -191,8 +191,12 @@ int SceNetAdhocMatchingContext::initializeInputThread(EmuEnvState &emuenv, SceUI
         return bindResult;
     }
 
-    const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
-    this->input_thread_id = thread_id;
+    if (input_thread_id == 0) {
+        const ThreadStatePtr input_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingInputThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+        this->input_thread_id = thread_id;
+    }
+
+
     this->inputThread = std::thread(adhocMatchingInputThread, std::ref(emuenv), this->input_thread_id, this->id);
     isInputThreadInitialized = true;
     return SCE_NET_ADHOC_MATCHING_OK;
@@ -261,8 +265,10 @@ int SceNetAdhocMatchingContext::initializeEventHandler(EmuEnvState &emuenv, SceU
     if (pipesResult < SCE_NET_ADHOC_MATCHING_OK) {
         return pipesResult;
     }
-    const ThreadStatePtr event_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
-    this->event_thread_id = event_thread->id;
+    if (event_thread_id == 0) {
+        const ThreadStatePtr event_thread = emuenv.kernel.create_thread(emuenv.mem, "SceAdhocMatchingEventThread", Ptr<void>(0), SCE_KERNEL_HIGHEST_PRIORITY_USER, SCE_KERNEL_THREAD_CPU_AFFINITY_MASK_DEFAULT, SCE_KERNEL_STACK_SIZE_USER_DEFAULT, nullptr);
+        this->event_thread_id = event_thread->id;
+    }
     this->eventThread = std::thread(adhocMatchingEventThread, std::ref(emuenv), this->event_thread_id, this->id);
     isEventThreadInitialized = true;
 
@@ -1222,7 +1228,7 @@ void SceNetAdhocMatchingContext::deleteAllTimedFunctions(SceNetAdhocMatchingTarg
 }
 
 void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingHandlerEventType type, SceNetInAddr *peer, SceSize optLen, void *opt) {
-    ZoneScopedC(0xF6C2FF);
+    LOG_INFO("notifyHandler {}", (int)type);
     if (!this->handler) {
         return;
     }

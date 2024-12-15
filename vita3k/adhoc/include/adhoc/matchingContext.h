@@ -354,8 +354,8 @@ private:
     bool isInputThreadInitialized;
     std::thread eventThread;
     std::thread inputThread;
-    SceUID event_thread_id;
-    SceUID input_thread_id;
+    SceUID event_thread_id=0;
+    SceUID input_thread_id=0;
 
     int msgPipeUid[2]; // 0 = read, 1 = write
 
