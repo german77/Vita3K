@@ -121,7 +121,7 @@ struct SceNetAdhocMatchingOptMessage {
     SceNetAdhocMatchingMessageHeader header;
     std::vector<char> dataBuffer;
     int targetCount;
-    char zero[0xc];
+    std::array<char,0xc> padding;
 
     std::size_t messageSize() const {
         return sizeof(header) + dataBuffer.size() + 0x10;
@@ -134,7 +134,7 @@ struct SceNetAdhocMatchingOptMessage {
         const int nTargetCount = htonl(targetCount);
         memcpy(data.data() + sizeof(header), dataBuffer.data(), dataBuffer.size());
         memcpy(data.data() + sizeof(header) + dataBuffer.size(), &nTargetCount, sizeof(int));
-        memcpy(data.data() + sizeof(header) + dataBuffer.size() + 0x4, &zero, sizeof(0xc));
+        memcpy(data.data() + sizeof(header) + dataBuffer.size() + 0x4, padding.data(), padding.size());
         return data;
     }
 
@@ -145,7 +145,7 @@ struct SceNetAdhocMatchingOptMessage {
         header.parse(data, dataLen);
         memcpy(dataBuffer.data(), data + sizeof(header), dataBuffer.size());
         memcpy(&targetCount, data + sizeof(header) + dataBuffer.size(), sizeof(int));
-        memcpy(&zero, data + sizeof(header) + dataBuffer.size() + 0x4, sizeof(0xc));
+        memcpy(padding.data(), data + sizeof(header) + dataBuffer.size() + 0x4, padding.size());
         targetCount = htonl(targetCount);
     }
 };
@@ -255,7 +255,7 @@ public:
     int getReadPipeUid() const;
     int getWritePipeUid() const;
 
-    int getMembers(SceSize &outMembersNum, SceNetAdhocMatchingMember *outMembers) const;
+    int getMembers(SceSize &outMembersCount, SceNetAdhocMatchingMember *outMembers) const;
     int getHelloOpt(SceSize &outOptlen, void *outOpt) const;
     int setHelloOpt(SceSize optlen, void *opt);
     void deleteTarget(SceNetAdhocMatchingTarget *target);
@@ -275,18 +275,18 @@ public:
     int broadcastAbort(EmuEnvState &emuenv, SceUID thread_id);
 
 public:
-    SceNetAdhocMatchingPipeMessage helloPipeMsg;
-    bool shouldHelloReqBeProcessed;
+    SceNetAdhocMatchingPipeMessage helloPipeMsg{};
+    bool shouldHelloReqBeProcessed{};
 
-    int sendSocket;
-    int recvSocket;
+    int sendSocket{};
+    int recvSocket{};
 
-    int rxbuflen;
-    char *rxbuf;
+    int rxbuflen{};
+    char *rxbuf{ nullptr };
 
-    uint32_t ownAddress;
-    uint32_t addressMask;
-    uint16_t ownPort;
+    uint32_t ownAddress{};
+    uint32_t addressMask{};
+    uint16_t ownPort{};
 
 private:
     // Packet data processing
@@ -336,37 +336,37 @@ private:
     int broadcastHello(EmuEnvState &emuenv, SceUID thread_id);
     int broadcastBye(EmuEnvState &emuenv, SceUID thread_id);
 
-    SceNetAdhocMatchingContext *next = nullptr;
-    SceUID id;
-    SceNetAdhocMatchingContextStatus status = SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING;
-    SceNetAdhocMatchingMode mode;
-    int maxnum;
-    SceUShort16 port;
+    SceNetAdhocMatchingContext *next{ nullptr };
+    SceUID id{};
+    SceNetAdhocMatchingContextStatus status{ SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_NOT_RUNNING };
+    SceNetAdhocMatchingMode mode{ SCE_NET_ADHOC_MATCHING_MODE_NONE };
+    int maxnum{};
+    SceUShort16 port{};
 
-    unsigned int helloInterval;
-    unsigned int keepAliveInterval;
-    unsigned int retryCount;
-    unsigned int rexmtInterval;
+    unsigned int helloInterval{};
+    unsigned int keepAliveInterval{};
+    unsigned int retryCount{};
+    unsigned int rexmtInterval{};
 
-    SceNetAdhocMatchingHandler handler;
+    SceNetAdhocMatchingHandler handler{};
 
-    bool shouldExit;
-    bool isEventThreadInitialized;
-    bool isInputThreadInitialized;
-    std::thread eventThread;
-    std::thread inputThread;
-    SceUID event_thread_id=0;
-    SceUID input_thread_id=0;
+    bool shouldExit{ true };
+    bool isEventThreadInitialized{};
+    bool isInputThreadInitialized{};
+    std::thread eventThread{};
+    std::thread inputThread{};
+    SceUID event_thread_id{};
+    SceUID input_thread_id{};
 
-    int msgPipeUid[2]; // 0 = read, 1 = write
+    int msgPipeUid[2]{}; // 0 = read, 1 = write
 
-    SceNetAdhocMatchingHelloMessage *helloMsg;
-    SceNetAdhocMatchingMemberMessage *memberMsg;
+    SceNetAdhocMatchingHelloMessage *helloMsg{ nullptr };
+    SceNetAdhocMatchingMemberMessage *memberMsg{ nullptr };
 
-    int helloOptionFlag;
+    int helloOptionFlag{};
 
-    SceNetAdhocMatchingTarget *targetList;
+    SceNetAdhocMatchingTarget *targetList{ nullptr };
 
-    SceNetAdhocMatchingCalloutSyncing calloutSyncing;
-    SceNetAdhocMatchingCalloutFunction helloTimedFunction;
+    SceNetAdhocMatchingCalloutSyncing calloutSyncing{};
+    SceNetAdhocMatchingCalloutFunction helloTimedFunction{};
 };

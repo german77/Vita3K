@@ -222,7 +222,7 @@ int SceNetAdhocMatchingContext::initializeSendSocket(EmuEnvState &emuenv, SceUID
     SceNetInAddr ownAddr;
     CALL_EXPORT(sceNetCtlAdhocGetInAddr, &ownAddr);
     this->ownAddress = ownAddr.s_addr;
-    this->addressMask = 0x0000FFFF;
+    this->addressMask = 0x00FFFFFF;
 
     int socket_uid = CALL_EXPORT(sceNetSocket, "SceNetAdhocMatchingSend", AF_INET, SCE_NET_SOCK_DGRAM_P2P, SCE_NET_IPPROTO_IP);
     if (socket_uid < SCE_NET_ADHOC_MATCHING_OK)
@@ -1074,19 +1074,19 @@ int SceNetAdhocMatchingContext::createMembersList() {
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int SceNetAdhocMatchingContext::getMembers(SceSize &outMembersNum, SceNetAdhocMatchingMember *outMembers) const {
+int SceNetAdhocMatchingContext::getMembers(SceSize &outMembersCount, SceNetAdhocMatchingMember *outMembers) const {
     if (this->memberMsg == nullptr) {
-        outMembersNum = 0;
+        outMembersCount = 0;
         return SCE_NET_ADHOC_MATCHING_OK;
     }
 
-    if (outMembersNum > 0) {
+    if (outMembersCount > 0 && outMembers != nullptr) {
         memcpy(&outMembers[0], &this->memberMsg->parent, sizeof(SceNetAdhocMatchingMember));
     }
 
     SceSize count = 1;
     for (SceSize i = 0; i < this->memberMsg->members.size(); i++) {
-        if (count >= outMembersNum) {
+        if (count >= outMembersCount) {
             break;
         }
         if (outMembers != nullptr) {
@@ -1095,7 +1095,7 @@ int SceNetAdhocMatchingContext::getMembers(SceSize &outMembersNum, SceNetAdhocMa
         count++;
     }
 
-    outMembersNum = count;
+    outMembersCount = count;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -1347,7 +1347,7 @@ int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID 
 
     if (headerSize == 0x14) {
         msg->targetCount = target.targetCount;
-        memset(msg->zero, 0, sizeof(msg->zero));
+        msg->padding = {};
     }
 
     SceNetSockaddrIn addr = {
