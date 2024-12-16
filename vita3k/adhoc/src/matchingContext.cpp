@@ -1227,7 +1227,6 @@ void SceNetAdhocMatchingContext::deleteAllTimedFunctions(SceNetAdhocMatchingTarg
 }
 
 void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingHandlerEventType type, SceNetInAddr *peer, SceSize optLen, void *opt) {
-    LOG_INFO("notifyHandler {}", (int)type);
     if (!this->handler) {
         return;
     }
@@ -1241,12 +1240,6 @@ void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID threa
     if (opt) {
         vOpt = alloc(emuenv.mem, optLen, "adhocHandlerOpt");
         memcpy(Ptr<char>(vOpt).get(emuenv.mem), opt, optLen);
-
-        char* data=new char[optLen + 1];
-
-        memset(data, 0, optLen + 1);
-        memcpy(data, opt, optLen);
-        LOG_INFO("notifyHandler {}", data);
     }
 
     const ThreadStatePtr thread = lock_and_find(thread_id, emuenv.kernel.threads, emuenv.kernel.mutex);
@@ -1289,7 +1282,6 @@ int SceNetAdhocMatchingContext::sendMemberListToTarget(EmuEnvState &emuenv, SceU
 
 int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, SceUID thread_id, const SceNetAdhocMatchingTarget &target, SceNetAdhocMatchingPacketType type, int datalen, char *data) {
     ZoneScopedC(0xF6C2FF);
-    LOG_CRITICAL("Send message {}", (int)type);
     const int flags = 0x400; // 0x480 if sdk version < 0x1500000
 
     auto *msg = new SceNetAdhocMatchingDataMessage();
@@ -1327,8 +1319,6 @@ int SceNetAdhocMatchingContext::sendDataMessageToTarget(EmuEnvState &emuenv, Sce
 }
 
 int SceNetAdhocMatchingContext::sendOptDataToTarget(EmuEnvState &emuenv, SceUID thread_id, const SceNetAdhocMatchingTarget &target, SceNetAdhocMatchingPacketType type, int optlen, char *opt) {
-    ZoneScopedC(0xF6C2FF);
-    LOG_CRITICAL("Send OPT DATA {}", (int)type);
     const int flags = 0x400; // 0x480 if sdk version < 0x1500000
     int headerSize = 4;
 

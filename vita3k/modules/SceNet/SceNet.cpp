@@ -111,6 +111,7 @@ std::string to_debug_str<SceNetSocketOption>(const MemState &mem, SceNetSocketOp
 
 EXPORT(int, sceNetAccept, int sid, SceNetSockaddr *addr, unsigned int *addrlen) {
     TRACY_FUNC(sceNetAccept, sid, addr, addrlen);
+    LOG_INFO("sceNetAccept");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -126,6 +127,7 @@ EXPORT(int, sceNetAccept, int sid, SceNetSockaddr *addr, unsigned int *addrlen) 
 
 EXPORT(int, sceNetBind, int sid, const SceNetSockaddr *addr, unsigned int addrlen) {
     TRACY_FUNC(sceNetBind, sid, addr, addrlen);
+    LOG_INFO("sceNetBind");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -141,6 +143,7 @@ EXPORT(int, sceNetClearDnsCache) {
 
 EXPORT(int, sceNetConnect, int sid, const SceNetSockaddr *addr, unsigned int addrlen) {
     TRACY_FUNC(sceNetConnect, sid, addr, addrlen);
+    LOG_INFO("sceNetConnect");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -185,6 +188,7 @@ EXPORT(int, sceNetEpollAbort) {
 
 EXPORT(int, sceNetEpollControl, int eid, SceNetEpollControlFlag op, int id, SceNetEpollEvent *ev) {
     TRACY_FUNC(sceNetEpollControl, eid, op, id, ev);
+    LOG_INFO("sceNetEpollControl");
 
     auto epoll = lock_and_find(eid, emuenv.net.epolls, emuenv.kernel.mutex);
     if (!epoll) {
@@ -218,6 +222,7 @@ EXPORT(int, sceNetEpollControl, int eid, SceNetEpollControlFlag op, int id, SceN
 
 EXPORT(int, sceNetEpollCreate, const char *name, int flags) {
     TRACY_FUNC(sceNetEpollCreate, name, flags);
+    LOG_INFO("sceNetEpollCreate");
     auto id = ++emuenv.net.next_epoll_id;
     auto epoll = std::make_shared<Epoll>();
     const std::lock_guard<std::mutex> lock(emuenv.kernel.mutex);
@@ -227,6 +232,7 @@ EXPORT(int, sceNetEpollCreate, const char *name, int flags) {
 
 EXPORT(int, sceNetEpollDestroy, int eid) {
     TRACY_FUNC(sceNetEpollDestroy, eid);
+    LOG_INFO("sceNetEpollDestroy");
 
     const std::lock_guard<std::mutex> lock(emuenv.kernel.mutex);
     if (emuenv.net.epolls.erase(eid) == 0) {
@@ -238,6 +244,7 @@ EXPORT(int, sceNetEpollDestroy, int eid) {
 
 EXPORT(int, sceNetEpollWait, int eid, SceNetEpollEvent *events, int maxevents, int timeout) {
     TRACY_FUNC(sceNetEpollWait, eid, events, maxevents, timeout);
+    LOG_INFO("sceNetEpollWait");
     auto epoll = lock_and_find(eid, emuenv.net.epolls, emuenv.kernel.mutex);
     if (!epoll) {
         return RET_ERROR(SCE_NET_ERROR_EBADF);
@@ -253,6 +260,7 @@ EXPORT(int, sceNetEpollWaitCB) {
 
 EXPORT(Ptr<int>, sceNetErrnoLoc) {
     TRACY_FUNC(sceNetErrnoLoc);
+    LOG_INFO("sceNetErrnoLoc");
     // TLS id was taken from disasm source
     auto addr = emuenv.kernel.get_thread_tls_addr(emuenv.mem, thread_id, TLS_NET_ERRNO);
     return addr.cast<int>();
@@ -260,6 +268,7 @@ EXPORT(Ptr<int>, sceNetErrnoLoc) {
 
 EXPORT(int, sceNetEtherNtostr, SceNetEtherAddr *n, char *str, unsigned int len) {
     TRACY_FUNC(sceNetEtherNtostr, n, str, len);
+    LOG_INFO("sceNetEtherNtostr");
     if (!emuenv.net.inited)
         return RET_ERROR(SCE_NET_ERROR_ENOTINIT);
 
@@ -273,6 +282,7 @@ EXPORT(int, sceNetEtherNtostr, SceNetEtherAddr *n, char *str, unsigned int len) 
 
 EXPORT(int, sceNetEtherStrton, const char *str, SceNetEtherAddr *n) {
     TRACY_FUNC(sceNetEtherStrton, str, n);
+    LOG_INFO("sceNetEtherStrton");
     if (!emuenv.net.inited)
         return RET_ERROR(SCE_NET_ERROR_ENOTINIT);
 
@@ -287,6 +297,7 @@ EXPORT(int, sceNetEtherStrton, const char *str, SceNetEtherAddr *n) {
 
 EXPORT(int, sceNetGetMacAddress, SceNetEtherAddr *addr, int flags) {
     TRACY_FUNC(sceNetGetMacAddress, addr, flags);
+    LOG_INFO("sceNetGetMacAddress");
     if (addr == nullptr) {
         return RET_ERROR(SCE_NET_EINVAL);
     }
@@ -327,6 +338,7 @@ EXPORT(int, sceNetGetpeername) {
 
 EXPORT(int, sceNetGetsockname, int sid, SceNetSockaddr *name, unsigned int *namelen) {
     TRACY_FUNC(sceNetGetsockname, sid, name, namelen);
+    LOG_INFO("sceNetGetsockname");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_ERROR_EBADF);
@@ -336,6 +348,7 @@ EXPORT(int, sceNetGetsockname, int sid, SceNetSockaddr *name, unsigned int *name
 
 EXPORT(int, sceNetGetsockopt, int sid, int level, int optname, void *optval, unsigned int *optlen) {
     TRACY_FUNC(sceNetGetsockopt, sid, level, optname, optval, optlen);
+    LOG_INFO("sceNetGetsockopt");
 
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
@@ -346,21 +359,25 @@ EXPORT(int, sceNetGetsockopt, int sid, int level, int optname, void *optval, uns
 
 EXPORT(unsigned int, sceNetHtonl, unsigned int n) {
     TRACY_FUNC(sceNetHtonl, n);
+    LOG_INFO("sceNetHtonl");
     return htonl(n);
 }
 
 EXPORT(int, sceNetHtonll, SceUInt64 n) {
     TRACY_FUNC(sceNetHtonll, n);
+    LOG_INFO("sceNetHtonll");
     return HTONLL(n);
 }
 
 EXPORT(unsigned short int, sceNetHtons, unsigned short int n) {
     TRACY_FUNC(sceNetHtons, n);
+    LOG_INFO("sceNetHtons");
     return htons(n);
 }
 
 EXPORT(Ptr<const char>, sceNetInetNtop, int af, const void *src, Ptr<char> dst, unsigned int size) {
     TRACY_FUNC(sceNetInetNtop, af, src, dst, size);
+    LOG_INFO("sceNetInetNtop");
     char *dst_ptr = dst.get(emuenv.mem);
 #ifdef _WIN32
     const char *res = InetNtop(af, src, dst_ptr, size);
@@ -376,6 +393,7 @@ EXPORT(Ptr<const char>, sceNetInetNtop, int af, const void *src, Ptr<char> dst, 
 
 EXPORT(int, sceNetInetPton, int af, const char *src, void *dst) {
     TRACY_FUNC(sceNetInetPton, af, src, dst);
+    LOG_INFO("sceNetInetPton");
 #ifdef _WIN32
     int res = InetPton(af, src, dst);
 #else
@@ -389,6 +407,7 @@ EXPORT(int, sceNetInetPton, int af, const char *src, void *dst) {
 
 EXPORT(int, sceNetInit, SceNetInitParam *param) {
     TRACY_FUNC(sceNetInit, param);
+    LOG_INFO("sceNetInit");
     if (emuenv.net.inited)
         return RET_ERROR(SCE_NET_ERROR_EBUSY);
 
@@ -408,6 +427,7 @@ EXPORT(int, sceNetInit, SceNetInitParam *param) {
 
 EXPORT(int, sceNetListen, int sid, int backlog) {
     TRACY_FUNC(sceNetListen, sid, backlog);
+    LOG_INFO("sceNetListen");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_ERROR_EBADF);
@@ -417,21 +437,25 @@ EXPORT(int, sceNetListen, int sid, int backlog) {
 
 EXPORT(unsigned int, sceNetNtohl, unsigned int n) {
     TRACY_FUNC(sceNetNtohl, n);
+    LOG_INFO("sceNetNtohl");
     return ntohl(n);
 }
 
 EXPORT(int, sceNetNtohll, SceUInt64 n) {
     TRACY_FUNC(sceNetNtohll, n);
+    LOG_INFO("sceNetNtohll");
     return NTOHLL(n);
 }
 
 EXPORT(unsigned short int, sceNetNtohs, unsigned short int n) {
     TRACY_FUNC(sceNetNtohs, n);
+    LOG_INFO("sceNetNtohs");
     return ntohs(n);
 }
 
 EXPORT(int, sceNetRecv, int sid, void *buf, unsigned int len, int flags) {
     TRACY_FUNC(sceNetRecv, sid, buf, len, flags);
+    LOG_INFO("sceNetRecv");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_ERROR_EBADF);
@@ -441,6 +465,7 @@ EXPORT(int, sceNetRecv, int sid, void *buf, unsigned int len, int flags) {
 
 EXPORT(int, sceNetRecvfrom, int sid, void *buf, unsigned int len, int flags, SceNetSockaddr *from, unsigned int *fromlen) {
     TRACY_FUNC(sceNetRecvfrom, sid, buf, len, flags, from, fromlen);
+    LOG_INFO("sceNetRecvfrom");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_ERROR_EBADF);
@@ -462,6 +487,7 @@ EXPORT(int, sceNetResolverAbort) {
 
 EXPORT(int, sceNetResolverCreate, const char *name, void *param, int flags) {
     TRACY_FUNC(sceNetResolverCreate, name, param, flags);
+    LOG_INFO("sceNetResolverCreate");
     STUBBED("Fake id");
     return emuenv.net.resolver_id;
 }
@@ -478,6 +504,7 @@ EXPORT(int, sceNetResolverGetError) {
 
 EXPORT(int, sceNetResolverStartAton, int rid, const SceNetInAddr *addr, char *hostname, int len, int timeout, int retry, int flags) {
     TRACY_FUNC(sceNetResolverStartAton, rid, addr, hostname, len, timeout, retry, flags);
+    LOG_INFO("sceNetResolverStartAton");
     struct hostent *resolved = gethostbyaddr((const char *)addr, len, AF_INET);
     strcpy(hostname, resolved->h_name);
     return 0;
@@ -485,6 +512,7 @@ EXPORT(int, sceNetResolverStartAton, int rid, const SceNetInAddr *addr, char *ho
 
 EXPORT(int, sceNetResolverStartNtoa, int rid, const char *emuenvname, SceNetInAddr *addr, int timeout, int retry, int flags) {
     TRACY_FUNC(sceNetResolverStartNtoa, rid, emuenvname, addr, timeout, retry, flags);
+    LOG_INFO("sceNetResolverStartNtoa");
     struct hostent *resolved = gethostbyname(emuenvname);
     if (resolved == nullptr) {
         memset(addr, 0, sizeof(*addr));
@@ -496,6 +524,7 @@ EXPORT(int, sceNetResolverStartNtoa, int rid, const char *emuenvname, SceNetInAd
 
 EXPORT(int, sceNetSend, int sid, const void *msg, unsigned int len, int flags) {
     TRACY_FUNC(sceNetSend, sid, msg, len, flags);
+    LOG_INFO("sceNetSend");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -510,6 +539,7 @@ EXPORT(int, sceNetSendmsg) {
 
 EXPORT(int, sceNetSendto, int sid, const void *msg, unsigned int len, int flags, const SceNetSockaddr *to, unsigned int tolen) {
     TRACY_FUNC(sceNetSendto, sid, msg, len, flags, to, tolen);
+    LOG_INFO("sceNetSendto");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -525,6 +555,7 @@ EXPORT(int, sceNetSetDnsInfo) {
 
 EXPORT(int, sceNetSetsockopt, int sid, SceNetProtocol level, SceNetSocketOption optname, const char *optval, unsigned int optlen) {
     TRACY_FUNC(sceNetSetsockopt, sid, level, optname, *optval, optlen);
+    LOG_INFO("sceNetSetsockopt");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -556,6 +587,7 @@ EXPORT(int, sceNetShowRoute) {
 
 EXPORT(int, sceNetShutdown, int sid, int how) {
     TRACY_FUNC(sceNetShutdown, sid, how);
+    LOG_INFO("sceNetShutdown");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -565,6 +597,7 @@ EXPORT(int, sceNetShutdown, int sid, int how) {
 
 EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, SceNetProtocol protocol) {
     TRACY_FUNC(sceNetSocket, name, domain, type, protocol);
+    LOG_INFO("sceNetSocket");
     int hostSockType = 0;
     switch (type) {
     case SCE_NET_SOCK_STREAM:
@@ -594,6 +627,7 @@ EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, S
 
 EXPORT(int, sceNetSocketAbort, int sid) {
     TRACY_FUNC(sceNetSocketAbort, sid);
+    LOG_INFO("sceNetSocketAbort");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -603,6 +637,7 @@ EXPORT(int, sceNetSocketAbort, int sid) {
 
 EXPORT(int, sceNetSocketClose, int sid) {
     TRACY_FUNC(sceNetSocketClose, sid);
+    LOG_INFO("sceNetSocketClose");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -616,6 +651,7 @@ EXPORT(int, sceNetSocketClose, int sid) {
 
 EXPORT(int, sceNetTerm) {
     TRACY_FUNC(sceNetTerm);
+    LOG_INFO("sceNetTerm");
     if (!emuenv.net.inited) {
         return RET_ERROR(SCE_NET_ERROR_ENOTINIT);
     }
