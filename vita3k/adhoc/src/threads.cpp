@@ -39,7 +39,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             return 0;
         }
 
-        std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+        //std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
         LOG_INFO("event: {}", (int)pipeMessage.type);
 
         switch (pipeMessage.type) {

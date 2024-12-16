@@ -1245,8 +1245,10 @@ void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID threa
     const ThreadStatePtr thread = lock_and_find(thread_id, emuenv.kernel.threads, emuenv.kernel.mutex);
     thread->run_adhoc_callback(this->handler, this->id, (uint32_t)type, Ptr<char>(vPeer), optLen, Ptr<char>(vOpt));
 
-    free(emuenv.mem, vPeer); // free peer
-    free(emuenv.mem, vOpt); // free opt
+    if (peer)
+        free(emuenv.mem, vPeer); // free peer
+    if (opt)
+        free(emuenv.mem, vOpt); // free opt
 }
 
 uint32_t SceNetAdhocMatchingContext::getBroadcastAddr() {
