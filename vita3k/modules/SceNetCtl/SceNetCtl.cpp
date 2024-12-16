@@ -101,7 +101,7 @@ EXPORT(int, sceNetCtlAdhocRegisterCallback, Ptr<void> func, Ptr<void> arg, int *
         return RET_ERROR(SCE_NET_CTL_ERROR_NOT_INITIALIZED);
     }
 
-    if (!func || !cid) {
+    if (!func || cid == nullptr) {
         return RET_ERROR(SCE_NET_CTL_ERROR_INVALID_ADDR);
     }
 
@@ -116,14 +116,17 @@ EXPORT(int, sceNetCtlAdhocRegisterCallback, Ptr<void> func, Ptr<void> arg, int *
         next_id++;
     }
 
-    if (next_id == 8) {
+    if (next_id == emuenv.netctl.adhocCallbacks.size()) {
         return RET_ERROR(SCE_NET_CTL_ERROR_CALLBACK_MAX);
     }
 
-    emuenv.netctl.adhocCallbacks[next_id].pc = func.address();
-    emuenv.netctl.adhocCallbacks[next_id].arg = arg.address();
+    emuenv.netctl.adhocCallbacks[next_id] = {
+        .id = next_id,
+        .pc = func.address(),
+        .arg = arg.address(),
+    };
     *cid = next_id;
-    return 0;
+    return SCE_NET_CTL_OK;
 }
 
 EXPORT(int, sceNetCtlAdhocUnregisterCallback, int cid) {
@@ -133,14 +136,18 @@ EXPORT(int, sceNetCtlAdhocUnregisterCallback, int cid) {
         return RET_ERROR(SCE_NET_CTL_ERROR_NOT_INITIALIZED);
     }
 
-    if ((cid < 0) || (cid >= 8)) {
+    if (cid < 0 || cid >= emuenv.netctl.adhocCallbacks.size()) {
         return RET_ERROR(SCE_NET_CTL_ERROR_INVALID_ID);
     }
 
     const std::lock_guard<std::mutex> lock(emuenv.netctl.mutex);
+
+    if (emuenv.netctl.adhocCallbacks[cid].pc == 0) {
+        return RET_ERROR(SCE_NET_CTL_ERROR_ID_NOT_FOUND);
+    }
+
     emuenv.netctl.adhocCallbacks[cid].pc = 0;
-    emuenv.netctl.adhocCallbacks[cid].arg = 0;
-    return 0;
+    return SCE_NET_CTL_OK;
 }
 
 EXPORT(int, sceNetCtlCheckCallback) {
@@ -417,7 +424,7 @@ EXPORT(int, sceNetCtlInetRegisterCallback, Ptr<void> func, Ptr<void> arg, int *c
         return RET_ERROR(SCE_NET_CTL_ERROR_NOT_INITIALIZED);
     }
 
-    if (!func || !cid) {
+    if (!func || cid == nullptr) {
         return RET_ERROR(SCE_NET_CTL_ERROR_INVALID_ADDR);
     }
 
@@ -432,14 +439,17 @@ EXPORT(int, sceNetCtlInetRegisterCallback, Ptr<void> func, Ptr<void> arg, int *c
         next_id++;
     }
 
-    if (next_id == 8) {
+    if (next_id == emuenv.netctl.callbacks.size()) {
         return RET_ERROR(SCE_NET_CTL_ERROR_CALLBACK_MAX);
     }
 
-    emuenv.netctl.callbacks[next_id].pc = func.address();
-    emuenv.netctl.callbacks[next_id].arg = arg.address();
+    emuenv.netctl.callbacks[next_id] = {
+        .id = next_id,
+        .pc = func.address(),
+        .arg = arg.address(),
+    };
     *cid = next_id;
-    return 0;
+    return SCE_NET_CTL_OK;
 }
 
 EXPORT(int, sceNetCtlInetUnregisterCallback, int cid) {
@@ -449,15 +459,18 @@ EXPORT(int, sceNetCtlInetUnregisterCallback, int cid) {
         return RET_ERROR(SCE_NET_CTL_ERROR_NOT_INITIALIZED);
     }
 
-    if ((cid < 0) || (cid >= 8)) {
+    if (cid < 0 || cid >= emuenv.netctl.callbacks.size()) {
         return RET_ERROR(SCE_NET_CTL_ERROR_INVALID_ID);
     }
 
     const std::lock_guard<std::mutex> lock(emuenv.netctl.mutex);
-    emuenv.netctl.callbacks[cid].pc = 0;
-    emuenv.netctl.callbacks[cid].arg = 0;
 
-    return 0;
+    if (emuenv.netctl.callbacks[cid].pc == 0) {
+        return RET_ERROR(SCE_NET_CTL_ERROR_ID_NOT_FOUND);
+    }
+
+    emuenv.netctl.callbacks[cid].pc = 0;
+    return SCE_NET_CTL_OK;
 }
 
 EXPORT(int, sceNetCtlInit) {

@@ -315,6 +315,7 @@ struct SceNetEtherAddr {
 };
 
 struct SceNetCtlCallback {
+    int id;
     Address pc;
     Address arg;
 };

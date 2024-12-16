@@ -132,8 +132,7 @@ EXPORT(int, sceNetBind, int sid, const SceNetSockaddr *addr, unsigned int addrle
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
     }
-    auto res = sock->bind(addr, addrlen);
-    return res;
+    return sock->bind(addr, addrlen);
 }
 
 EXPORT(int, sceNetClearDnsCache) {
@@ -470,9 +469,7 @@ EXPORT(int, sceNetRecvfrom, int sid, void *buf, unsigned int len, int flags, Sce
     if (!sock) {
         return RET_ERROR(SCE_NET_ERROR_EBADF);
     }
-
-    const int ret = sock->recv_packet(buf, len, flags, from, fromlen);
-    return ret;
+    return sock->recv_packet(buf, len, flags, from, fromlen);
 }
 
 EXPORT(int, sceNetRecvmsg) {
@@ -643,10 +640,10 @@ EXPORT(int, sceNetSocketClose, int sid) {
         return RET_ERROR(SCE_NET_EBADF);
     }
     int result = sock->close();
-    if (result > 0) {
+    if (result >= 0) {
         emuenv.net.socks.erase(sid);
     }
-    return sock->close();
+    return result;
 }
 
 EXPORT(int, sceNetTerm) {
