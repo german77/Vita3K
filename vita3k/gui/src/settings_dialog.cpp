@@ -1082,40 +1082,40 @@ void draw_settings_dialog(GuiState &gui, EmuEnvState &emuenv) {
         ImGui::Spacing();
 
         std::vector<const char *> addrsSelect;
-        std::vector<const char *> baddrsSelect;
+        std::vector<const char *> nMaskSelect;
         std::vector<net_utils::AssignedAddr> addrs;
         net_utils::getAllAssignedAddrs(addrs);
 
         std::vector<std::string *> holder;
-        std::vector<std::string *> broadcastHolder;
+        std::vector<std::string *> netMaskHolder;
 
         for (auto &addr : addrs) {
             const auto a = new std::string(addr.addr + " (" + addr.name + ")");
             holder.emplace_back(a);
             addrsSelect.emplace_back(a->c_str());
 
-            const auto b = new std::string(addr.bcast + " (" + addr.name + ")");
-            broadcastHolder.emplace_back(b);
-            baddrsSelect.emplace_back(b->c_str());
+            const auto b = new std::string(addr.netMask);
+            netMaskHolder.emplace_back(b);
+            nMaskSelect.emplace_back(b->c_str());
         }
 
-        ImGui::Combo("Adhoc Address", &emuenv.cfg.adhoc_addr, addrsSelect.data(), static_cast<int>(addrsSelect.size()));
+        ImGui::Combo("Network Address", &emuenv.cfg.adhoc_addr, addrsSelect.data(), static_cast<int>(addrsSelect.size()));
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Select which Address to use in adhoc.");
 
         ImGui::BeginDisabled();
-        ImGui::Combo("Adhoc Broadcast Address", &emuenv.cfg.adhoc_addr, baddrsSelect.data(), static_cast<int>(baddrsSelect.size()));
+        ImGui::Combo("Network Mask", &emuenv.cfg.adhoc_addr, nMaskSelect.data(), static_cast<int>(nMaskSelect.size()));
         ImGui::EndDisabled();
 
         for (auto &h : holder) {
             delete h;
         }
 
-        for (auto &h : broadcastHolder) {
+        for (auto &h : netMaskHolder) {
             delete h;
         }
         holder.clear();
-        broadcastHolder.clear();
+        netMaskHolder.clear();
 
         // HTTP
         ImGui::Spacing();

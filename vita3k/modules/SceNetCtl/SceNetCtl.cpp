@@ -241,53 +241,21 @@ EXPORT(int, sceNetCtlInetGetInfo, int code, SceNetCtlInfo *info) {
         return RET_ERROR(SCE_NET_CTL_ERROR_INVALID_ADDR);
     }
 
-    switch (code) {
-    case SCE_NETCTL_INFO_GET_IP_ADDRESS: {
-        strcpy(info->ip_address, "127.0.0.1"); // placeholder in case gethostbyname can't find another ip
-#ifdef _WIN32
-        // TODO: windows has its own functions for getting the ipv4 addr of the host in a local network
-        // what we are doing here right now is not enough filtering and its probably better to use them
-        char devname[80];
-        auto error =gethostname(devname, 80);
-        struct hostent *resolved = gethostbyname(devname);
-        for (int i = 0; resolved->h_addr_list[i] != nullptr; ++i) {
-            struct in_addr addrIn;
-            memcpy(&addrIn, resolved->h_addr_list[i], sizeof(uint32_t));
-            char *addr = inet_ntoa(addrIn);
-            if (strcmp(addr, "127.0.0.1") != 0) {
-                strcpy(info->ip_address, addr);
-                break;
-            }
-        }
-#else
-        struct ifaddrs *ifAddrStruct = NULL;
-        struct ifaddrs *ifa = NULL;
-        void *tmpAddrPtr = NULL;
+    std::vector<net_utils::AssignedAddr> addrs;
+    net_utils::getAllAssignedAddrs(addrs);
+    std::size_t selectedInterface = emuenv.cfg.adhoc_addr;
 
-        getifaddrs(&ifAddrStruct);
-
-        for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
-            if (!ifa->ifa_addr) {
-                continue;
-            }
-
-            if ((ifa->ifa_flags & IFF_LOOPBACK) != 0)
-                continue;
-            if (ifa->ifa_flags)
-                if (ifa->ifa_addr->sa_family == AF_INET) { // check it is IP4
-                    // is a valid IP4 Address
-                    tmpAddrPtr = &((sockaddr_in *)ifa->ifa_addr)->sin_addr;
-                    char addressBuffer[INET_ADDRSTRLEN];
-                    inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
-                    strcpy(info->ip_address, addressBuffer);
-                    break;
-                }
-        }
-        if (ifAddrStruct != NULL)
-            freeifaddrs(ifAddrStruct);
-#endif
-        break;
+    if (selectedInterface >= addrs.size()) {
+        LOG_INFO("Invalid interface selected");
+        selectedInterface = 0;
     }
+
+    const auto addr = addrs[selectedInterface];
+
+    switch (code) {
+    case SCE_NETCTL_INFO_GET_IP_ADDRESS:
+        inet_pton(AF_INET, addr.addr.c_str(), &info->ip_address);
+        break;
     case SCE_NETCTL_INFO_GET_DEVICE:
         info->device = 0; /*SCE_NET_CTL_DEVICE_WIRELESS*/
         // STUBBED("SCE_NETCTL_INFO_GET_DEVICE return SCE_NET_CTL_DEVICE_WIRELESS");
@@ -295,6 +263,9 @@ EXPORT(int, sceNetCtlInetGetInfo, int code, SceNetCtlInfo *info) {
     case SCE_NETCTL_INFO_GET_RSSI_PERCENTAGE:
         info->rssi_percentage = 100;
         // STUBBED("code SCE_NETCTL_INFO_GET_RSSI_PERCENTAGE return 100%");
+        break;
+    case SCE_NETCTL_INFO_GET_NETMASK:
+        inet_pton(AF_INET, addr.netMask.c_str(), &info->netmask);
         break;
     default:
         switch (code) {
@@ -334,9 +305,6 @@ EXPORT(int, sceNetCtlInetGetInfo, int code, SceNetCtlInfo *info) {
         case SCE_NETCTL_INFO_GET_PPPOE_AUTH_NAME:
             STUBBED("code SCE_NETCTL_INFO_GET_PPPOE_AUTH_NAME not implemented");
             break;
-        case SCE_NETCTL_INFO_GET_NETMASK:
-            STUBBED("code SCE_NETCTL_INFO_GET_NETMASK not implemented");
-            break;
         case SCE_NETCTL_INFO_GET_DEFAULT_ROUTE:
             STUBBED("code SCE_NETCTL_INFO_GET_DEFAULT_ROUTE not implemented");
             break;
@@ -375,10 +343,6 @@ EXPORT(int, sceNetCtlAdhocGetInAddr, SceNetInAddr *inaddr) {
 
     std::vector<net_utils::AssignedAddr> addrs;
     net_utils::getAllAssignedAddrs(addrs);
-
-    if (addrs.size() == 1) { // We only have loopback :C
-        LOG_WARN_ONCE("loopback address was the only found addr");
-    }
 
     const auto addr = addrs[emuenv.cfg.adhoc_addr].addr.c_str();
 

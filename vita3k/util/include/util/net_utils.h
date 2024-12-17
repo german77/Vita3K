@@ -48,7 +48,7 @@ struct ProgressData {
 struct AssignedAddr {
     std::string name; // Name of the interface
     std::string addr; // Assigned address 
-    std::string bcast; // Broadcast address of the interface
+    std::string netMask; // Broadcast address of the interface
 };
 
 typedef const std::function<ProgressState *(float, uint64_t)> &ProgressCallback;

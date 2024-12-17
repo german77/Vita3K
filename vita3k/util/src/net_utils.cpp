@@ -21,6 +21,8 @@
 #include <curl/curl.h>
 
 #ifdef _WIN32
+#include <iphlpapi.h>
+#include <windows.h>
 #include <winsock2.h>
 #else
 #include <arpa/inet.h>
@@ -480,21 +482,41 @@ bool download_file(const std::string &url, const std::string &output_file_path, 
 void getAllAssignedAddrs(std::vector<AssignedAddr> &outAddrs) {
     outAddrs.clear();
 #ifdef _WIN32
-    outAddrs.push_back({"localhost", "127.0.0.1" });
-    //  TODO: re do this to match linux version
-    char devname[80];
-    auto error = gethostname(devname, 80);
-    struct hostent *resolved = gethostbyname(devname);
-    for (int i = 0; resolved->h_addr_list[i] != nullptr; ++i) {
-        struct in_addr addrIn;
-        memcpy(&addrIn, resolved->h_addr_list[i], sizeof(uint32_t));
-        char *addr = inet_ntoa(addrIn);
-        if (strcmp(addr, "127.0.0.1") != 0) {
-            AssignedAddr newAddr = {};
-            newAddr.addr = std::string(addr);
-            outAddrs.push_back(newAddr);
+    PIP_ADAPTER_INFO pAdapterInfo;
+    DWORD dwRetVal = 0;
+    UINT i;
+    ULONG ulOutBufLen = sizeof(IP_ADAPTER_INFO);
+    pAdapterInfo = (IP_ADAPTER_INFO *)malloc(sizeof(IP_ADAPTER_INFO));
+    if (pAdapterInfo == NULL) {
+        LOG_CRITICAL("Error allocating memory needed to call GetAdaptersinfo");
+        return;
+    }
+    // Make an initial call to GetAdaptersInfo to get the necessary size into the ulOutBufLen variable
+    if (GetAdaptersInfo(pAdapterInfo, &ulOutBufLen) == ERROR_BUFFER_OVERFLOW) {
+        free(pAdapterInfo);
+        pAdapterInfo = (IP_ADAPTER_INFO *)malloc(ulOutBufLen);
+        if (pAdapterInfo == NULL) {
+            LOG_CRITICAL("Error allocating memory needed to call GetAdaptersinfo");
+            return;
         }
     }
+    if ((dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen)) == NO_ERROR) {
+        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+        while (pAdapter) {
+            if (pAdapter->Type == MIB_IF_TYPE_ETHERNET) {
+                IP_ADDR_STRING *pIPAddr = &pAdapter->IpAddressList;
+                while (pIPAddr) {
+                    outAddrs.push_back({ pAdapter->Description, pIPAddr->IpAddress.String, pIPAddr->IpMask.String });
+                    pIPAddr = pIPAddr->Next;
+                }
+            }
+            pAdapter = pAdapter->Next;
+        }
+    } else {
+        LOG_CRITICAL("GetAdaptersInfo failed with error: %d", dwRetVal);
+    }
+    if (outAddrs.size()==0)
+        outAddrs.push_back({ "localhost", "127.0.0.1", "255.255.255.255" });
 #else
     outAddrs.push_back({ "lo", "127.0.0.1" });
     struct ifaddrs *ifAddrStruct = NULL;

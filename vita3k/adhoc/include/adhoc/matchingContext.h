@@ -285,7 +285,6 @@ public:
     char *rxbuf{ nullptr };
 
     uint32_t ownAddress{};
-    uint32_t addressMask{};
     uint16_t ownPort{};
 
 private:

@@ -17,12 +17,14 @@
 
 #include "SceNet.h"
 
+#include "util/net_utils.h"
 #include <kernel/state.h>
 #include <net/state.h>
 #include <net/types.h>
 #include <util/lock_and_find.h>
 
 #include <chrono>
+#include <cstring>
 #include <thread>
 
 #include <util/tracy.h>
@@ -526,6 +528,7 @@ EXPORT(int, sceNetSend, int sid, const void *msg, unsigned int len, int flags) {
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
     }
+
     return sock->send_packet(msg, len, flags, nullptr, 0);
 }
 
@@ -540,6 +543,14 @@ EXPORT(int, sceNetSendto, int sid, const void *msg, unsigned int len, int flags,
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
+    }
+
+    SceNetSockaddrIn *broadcast_to = new SceNetSockaddrIn();
+    memcpy(broadcast_to, to, sizeof(SceNetSockaddrIn));
+
+    if (broadcast_to->sin_addr.s_addr == INADDR_BROADCAST) {
+        broadcast_to->sin_addr.s_addr = sock->broadcastAddr;
+        return sock->send_packet(msg, len, flags, (SceNetSockaddr *)broadcast_to, tolen);
     }
 
     return sock->send_packet(msg, len, flags, to, tolen);
@@ -617,6 +628,22 @@ EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, S
 
     LOG_ERROR("socket {} {} {}", domain, hostSockType, static_cast<int>(protocol));
     SocketPtr sock = std::make_shared<PosixSocket>(domain, hostSockType, protocol);
+
+    std::vector<net_utils::AssignedAddr> addrs;
+    net_utils::getAllAssignedAddrs(addrs);
+    std::size_t selectedInterface = emuenv.cfg.adhoc_addr;
+
+    if (selectedInterface >= addrs.size()) {
+        LOG_INFO("Invalid interface selected");
+        selectedInterface = 0;
+    }
+
+    const auto addr = addrs[selectedInterface];
+    int netAddr, netMask;
+    inet_pton(AF_INET, addr.addr.c_str(), &netAddr);
+    inet_pton(AF_INET, addr.netMask.c_str(), &netMask);
+    sock->broadcastAddr = netAddr | ~netMask;
+
     auto id = ++emuenv.net.next_id;
     emuenv.net.socks.emplace(id, sock);
     return id;
