@@ -20,11 +20,8 @@
 void SceNetAdhocMatchingTarget::setSendDataStatus(SceNetAdhocMatchingSendDataStatus status) {
     if (this->sendDataStatus == status)
         return;
-
-    if (this->sendDataStatus == SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_BUSY && status == SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY) {
-        delete this->sendData;
-        this->sendData = nullptr;
-    }
+    if (this->sendDataStatus == SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_BUSY && status == SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY)
+        deleteSendData();
     this->sendDataStatus = status;
 }
 
@@ -46,10 +43,8 @@ void SceNetAdhocMatchingTarget::setStatus(SceNetAdhocMatchingTargetStatus status
     }
 
     if (this->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED && this->sendDataStatus != SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY) {
-        if (this->sendDataStatus == SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_BUSY) {
-            delete this->sendData;
-            this->sendData = nullptr;
-        }
+        if (this->sendDataStatus == SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_BUSY)
+            deleteSendData();
         this->sendDataStatus = SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY;
     }
 
@@ -69,51 +64,32 @@ int SceNetAdhocMatchingTarget::getWritePipeUid() const {
     return this->msgPipeUid[1];
 }
 
-int SceNetAdhocMatchingTarget::setOptMessage(SceSize optLen, char *opt) {
-    if (this->optLength > 0)
-        deleteOptMessage();
-    if (optLen == 0)
-        return SCE_NET_ADHOC_MATCHING_OK;
+int SceNetAdhocMatchingTarget::setOptMessage(SceSize length, const char *data) {
+    this->opt.resize(length);
+    if (length != 0)
+        memcpy(this->opt.data(), data, length);
 
-    this->opt = new char[optLen];
-    if (this->opt == nullptr)
-        return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
-
-    memcpy(this->opt, opt, optLen);
-    this->optLength = optLen;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-SceSize SceNetAdhocMatchingTarget::getOptLen() const {
-    return this->optLength;
-}
-
-char *SceNetAdhocMatchingTarget::getOpt() const {
-    return this->opt;
+std::span<const char> SceNetAdhocMatchingTarget::getOpt() const {
+    return opt;
 }
 
 void SceNetAdhocMatchingTarget::deleteOptMessage() {
-    if (this->opt == nullptr)
-        return;
-
-    delete this->opt;
-    this->optLength = 0;
-    this->opt = nullptr;
+    opt.clear();
 }
 
-int SceNetAdhocMatchingTarget::setRawPacket(SceSize rawPacketLen, SceSize packetLen, char *packet) {
-    if (this->packetLength > 0)
-        deleteRawPacket();
-    if (rawPacketLen == 0)
+int SceNetAdhocMatchingTarget::setRawPacket(SceSize rawLength, SceSize length, const char *data) {
+    this->packet.resize(rawLength);
+    if (rawLength == 0) {
+        this->packetLength = 0;
         return SCE_NET_ADHOC_MATCHING_OK;
+    }
 
-    this->packet = new char[rawPacketLen];
-    if (this->packet == nullptr)
-        return SCE_NET_ADHOC_MATCHING_ERROR_NO_SPACE;
+    memcpy(this->packet.data(), data, rawLength);
+    this->packetLength = length + sizeof(SceNetAdhocMatchingMessageHeader);
 
-    memcpy(this->packet, packet, rawPacketLen);
-    this->packetLength = packetLen + sizeof(SceNetAdhocMatchingMessageHeader);
-    this->rawPacketLength = rawPacketLen;
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -121,30 +97,27 @@ SceSize SceNetAdhocMatchingTarget::getPacketLen() const {
     return this->packetLength;
 }
 
-SceSize SceNetAdhocMatchingTarget::getRawPacketLen() const {
-    return this->rawPacketLength;
-}
-
-char *SceNetAdhocMatchingTarget::getRawPacket() const {
+std::span<const char> SceNetAdhocMatchingTarget::getRawPacket() const {
     return this->packet;
 }
 
-SceNetAdhocMatchingMessageHeader SceNetAdhocMatchingTarget::getPacketHeader() const {
-    if (this->packet == nullptr)
-        return {};
-
-    SceNetAdhocMatchingMessageHeader header;
-    header.parse(this->packet, this->rawPacketLength);
-
-    return header;
+void SceNetAdhocMatchingTarget::deleteRawPacket() {
+    this->packetLength = 0;
+    this->packet.clear();
 }
 
-void SceNetAdhocMatchingTarget::deleteRawPacket() {
-    if (this->packet == nullptr)
-        return;
+int SceNetAdhocMatchingTarget::setSendData(SceSize length, const char *data) {
+    this->sendData.resize(length);
+    if (length != 0)
+        memcpy(this->sendData.data(), data, length);
 
-    delete this->packet;
-    this->packetLength = 0;
-    this->rawPacketLength = 0;
-    this->packet = nullptr;
+    return SCE_NET_ADHOC_MATCHING_OK;
+}
+
+std::span<const char> SceNetAdhocMatchingTarget::getSendData() const {
+    return this->sendData;
+}
+
+void SceNetAdhocMatchingTarget::deleteSendData() {
+    this->sendData.clear();
 }

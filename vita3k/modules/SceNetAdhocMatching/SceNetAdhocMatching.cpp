@@ -42,7 +42,7 @@ EXPORT(int, sceNetAdhocMatchingAbortSendData, int id, SceNetInAddr *addr) {
     if (ctx->getStatus() != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_RUNNING)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_RUNNING);
 
-    auto *target = ctx->findTargetByAddr(addr);
+    auto *target = ctx->findTargetByAddr(*addr);
 
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
@@ -70,7 +70,7 @@ EXPORT(int, sceNetAdhocMatchingCancelTargetWithOpt, int id, SceNetInAddr *addr, 
     if (ctx->getStatus() != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_RUNNING)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_RUNNING);
 
-    auto *foundTarget = ctx->findTargetByAddr(addr);
+    auto *foundTarget = ctx->findTargetByAddr(*addr);
     if (foundTarget == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
 
@@ -237,7 +237,7 @@ EXPORT(int, sceNetAdhocMatchingSelectTarget, int id, SceNetInAddr *addr, int opt
     if (ctx->getStatus() != SCE_NET_ADHOC_MATCHING_CONTEXT_STATUS_RUNNING)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_NOT_RUNNING);
 
-    auto foundTarget = ctx->findTargetByAddr(addr);
+    auto foundTarget = ctx->findTargetByAddr(*addr);
     if (foundTarget == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);
 
@@ -269,7 +269,7 @@ EXPORT(int, sceNetAdhocMatchingSendData, int id, SceNetInAddr *addr, int dataLen
     if (ctx == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_INVALID_ID);
 
-    auto *target = ctx->findTargetByAddr(addr);
+    auto *target = ctx->findTargetByAddr(*addr);
 
     if (target == nullptr)
         return RET_ERROR(SCE_NET_ADHOC_MATCHING_ERROR_UNKNOWN_TARGET);

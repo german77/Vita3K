@@ -17,6 +17,9 @@
 
 #pragma once
 
+#include <vector>
+#include <span>
+
 #include "adhoc/matchingContext.h"
 #include "adhoc/threads.h"
 #include "net/types.h"
@@ -50,17 +53,18 @@ public:
     int getReadPipeUid() const;
     int getWritePipeUid() const;
 
-    int setOptMessage(SceSize optLen, char *opt);
-    SceSize getOptLen() const;
-    char *getOpt() const;
+    int setOptMessage(SceSize length, const char *data);
+    std::span<const char> getOpt() const;
     void deleteOptMessage();
 
-    int setRawPacket(SceSize rawPacketLen, SceSize packetLen, char *packet);
-    SceSize getRawPacketLen() const;
+    int setRawPacket(SceSize rawLenght, SceSize length, const char *data);
     SceSize getPacketLen() const;
-    char *getRawPacket() const;
-    SceNetAdhocMatchingMessageHeader getPacketHeader() const;
+    std::span<const char> getRawPacket() const;
     void deleteRawPacket();
+
+    int setSendData(SceSize length, const char *data);
+    std::span<const char> getSendData() const;
+    void deleteSendData();
 
     SceNetAdhocMatchingTarget *next;
     SceNetAdhocMatchingTargetStatus status;
@@ -79,7 +83,6 @@ public:
     SceSize sendDataCount;
     SceSize recvDataCount;
     SceNetAdhocMatchingSendDataStatus sendDataStatus;
-    char *sendData;
 
     SceNetAdhocMatchingAckTimeout targetTimeout;
     SceNetAdhocMatchingAckTimeout sendDataTimeout;
@@ -90,10 +93,8 @@ public:
 private:
     int msgPipeUid[2]; // 0 = read, 1 = write
 
-    SceSize optLength = 0;
-    char *opt = nullptr;
-
     SceSize packetLength = 0;
-    SceSize rawPacketLength = 0;
-    char *packet = nullptr;
+    std::vector<char> packet{};
+    std::vector<char> sendData{};
+    std::vector<char> opt{};
 };
