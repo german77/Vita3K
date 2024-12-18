@@ -34,13 +34,19 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
     while (ctx->isRunning()) {
         if (read(ctx->getReadPipeUid(), &pipeMessage, sizeof(pipeMessage)) < 0)
             return 0;
-        if (pipeMessage.type == SCE_NET_ADHOC_MATCHING_EVENT_ABORT) {
+        LOG_INFO("event: {}", (int)pipeMessage.type);
+
+        // Special notifications
+        switch (pipeMessage.type) {
+        case SCE_NET_ADHOC_MATCHING_EVENT_ABORT:
             ctx->broadcastAbort(emuenv, thread_id);
             return 0;
+        case SCE_NET_ADHOC_MATCHING_EVENT_NOTIFICATION:
+            ctx->SendNotificationQueue(emuenv, thread_id);
+            break;
         }
 
-        //std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
-        LOG_INFO("event: {}", (int)pipeMessage.type);
+        std::lock_guard guard(emuenv.adhoc.getMutex());
 
         switch (pipeMessage.type) {
         case SCE_NET_ADHOC_MATCHING_EVENT_PACKET:
@@ -56,7 +62,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             ctx->handleEventHelloTimeout(emuenv, thread_id);
             break;
         case SCE_NET_ADHOC_MATCHING_EVENT_DATA_TIMEOUT:
-            ctx->handleEventDataTimeout(emuenv, thread_id, pipeMessage.target);
+            ctx->handleEventDataTimeout(pipeMessage.target);
             break;
         }
 
@@ -64,7 +70,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             continue;
         }
 
-        if (pipeMessage.target->delete_target && !pipeMessage.target->incomingPacketMessage.isSheduled && !pipeMessage.target->targetTimeout.message.isSheduled) {
+        if (pipeMessage.target->deleteTarget && !pipeMessage.target->incomingPacketMessage.isSheduled && !pipeMessage.target->targetTimeout.message.isSheduled) {
             ctx->deleteTarget(pipeMessage.target);
         }
     }
@@ -111,7 +117,7 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
         LOG_INFO("New input from {}.{}.{}.{}:{}={}", addr[0], addr[1], addr[2], addr[3], htons(fromAddr.sin_port), data);
 
         // We received the whole packet, we can now commence the parsing and the fun
-        std::lock_guard<std::mutex> guard(emuenv.adhoc.getMutex());
+        std::lock_guard guard(emuenv.adhoc.getMutex());
         ctx->handleIncommingPackage(&fromAddr.sin_addr, rawPacketSize, packet.packetLength);
     }
 

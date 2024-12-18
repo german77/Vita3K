@@ -281,13 +281,13 @@ void SceNetAdhocMatchingContext::closeEventHandler() {
     SceNetAdhocMatchingPipeMessage abortMsg{
         .type = SCE_NET_ADHOC_MATCHING_EVENT_ABORT,
     };
-    write(this->msgPipeUid[1], &abortMsg, sizeof(SceNetAdhocMatchingPipeMessage));
+    write(getWritePipeUid(), &abortMsg, sizeof(SceNetAdhocMatchingPipeMessage));
 
     if (this->eventThread.joinable())
         this->eventThread.join();
 
-    close(this->msgPipeUid[0]);
-    close(this->msgPipeUid[1]);
+    close(getWritePipeUid());
+    close(getReadPipeUid());
     isEventThreadInitialized = false;
 }
 
@@ -378,12 +378,12 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
                 setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 deleteAllTimedFunctions(target);
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, &target.addr);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, target.addr);
                 break;
             case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
                 setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
                 deleteAllTimedFunctions(target);
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_LEAVE, &target.addr);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_LEAVE, target.addr);
                 break;
             }
         }
@@ -391,7 +391,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
 
     switch (packet.type) {
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO:
-        processHelloPacket(emuenv, thread_id, target);
+        processHelloPacket(target);
         break;
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_HELLO_ACK:
         processHelloAckPacket(emuenv, thread_id, target);
@@ -405,14 +405,14 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(target);
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, &target.addr);
+            notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, target.addr);
             break;
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED);
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK4);
             addTargetTimeout(target);
             target.targetTimeout.retryCount = retryCount;
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, &target.addr);
+            notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, target.addr);
             break;
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED);
@@ -421,11 +421,11 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             addTargetTimeout(target);
             target.targetTimeout.retryCount = retryCount;
             if (target.getPacketLen() - 4 < 1) {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, &target.addr);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, target.addr);
             } else {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, &target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
             }
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, &target.addr);
+            notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, target.addr);
             break;
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK4);
@@ -442,13 +442,13 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(target);
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, &target.addr);
+            notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, target.addr);
             break;
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED);
             addTargetTimeout(target);
             target.targetTimeout.retryCount = retryCount;
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, &target.addr);
+            notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, target.addr);
             break;
         }
         break;
@@ -461,27 +461,27 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(target);
             if (target.getPacketLen() - 4 < 1) {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, &target.addr);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, target.addr);
             } else {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, &target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
             }
             break;
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2:
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(target);
             if (target.getPacketLen() - 4 < 1) {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DENY, &target.addr);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DENY, target.addr);
             } else {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DENY, &target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DENY, target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
             }
             break;
         case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED:
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(target);
             if (target.getPacketLen() - 4 < 1) {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_LEAVE, &target.addr);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_LEAVE, target.addr);
             } else {
-                notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_LEAVE, &target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
+                notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_LEAVE, target.addr, target.getPacketLen() - 4, target.getRawPacket() + 4);
             }
             break;
         }
@@ -493,10 +493,10 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
         processMemberListAckPacket(emuenv, thread_id, target);
         return;
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_BYE:
-        processByePacket(emuenv, thread_id, target);
+        processByePacket(target);
         return;
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9:
-        processUnk9Packet(emuenv, thread_id, target);
+        processUnk9Packet(target);
         return;
     case SCE_NET_ADHOC_MATCHING_PACKET_TYPE_DATA:
         processDataPacket(emuenv, thread_id, target);
@@ -507,7 +507,7 @@ void SceNetAdhocMatchingContext::processPacketFromTarget(EmuEnvState &emuenv, Sc
     }
 }
 
-int SceNetAdhocMatchingContext::processHelloPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target) {
+int SceNetAdhocMatchingContext::processHelloPacket(SceNetAdhocMatchingTarget &target) {
     const SceSize targetCount = this->countTargetsWithStatusOrBetter(SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES);
 
     SceNetAdhocMatchingHelloMessage helloPacket;
@@ -528,7 +528,7 @@ int SceNetAdhocMatchingContext::processHelloPacket(EmuEnvState &emuenv, SceUID t
     if (targetCount + 1 >= maxnum)
         return SCE_NET_ADHOC_MATCHING_OK;
 
-    this->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_HELLO, &target.addr, helloPacket.optBuffer.size(), helloPacket.optBuffer.data());
+    this->notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_HELLO, target.addr, helloPacket.optBuffer.size(), helloPacket.optBuffer.data());
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -546,9 +546,9 @@ int SceNetAdhocMatchingContext::processHelloAckPacket(EmuEnvState &emuenv, SceUI
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_UNK9, 0, NULL);
             int data_size = target.getPacketLen() - 4;
             if (data_size < 1) {
-                this->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_REQUEST, &target.addr);
+                this->notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_REQUEST, target.addr);
             } else {
-                this->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_REQUEST, &target.addr, data_size, target.getRawPacket() + 0x4);
+                this->notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_REQUEST, target.addr, data_size, target.getRawPacket() + 0x4);
             }
         } else {
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
@@ -562,7 +562,7 @@ int SceNetAdhocMatchingContext::processHelloAckPacket(EmuEnvState &emuenv, SceUI
             setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
             deleteAllTimedFunctions(target);
             sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
-            this->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, &target.addr);
+            this->notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_CANCEL, target.addr);
         }
         break;
     case SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES:
@@ -576,9 +576,9 @@ int SceNetAdhocMatchingContext::processHelloAckPacket(EmuEnvState &emuenv, SceUI
         addRegisterTargetTimeout(target);
         int data_size = target.getPacketLen() - 4;
         if (data_size < 1) {
-            this->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, &target.addr);
+            this->notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, target.addr);
         } else {
-            this->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, &target.addr, data_size, target.getRawPacket() + 0x4);
+            this->notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ACCEPT, target.addr, data_size, target.getRawPacket() + 0x4);
         }
         break;
     }
@@ -586,7 +586,7 @@ int SceNetAdhocMatchingContext::processHelloAckPacket(EmuEnvState &emuenv, SceUI
         setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         deleteAllTimedFunctions(target);
         sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, 0, NULL);
-        this->notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, &target.addr);
+        this->notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, target.addr);
     }
     return SCE_NET_ADHOC_MATCHING_OK;
 }
@@ -601,7 +601,7 @@ int SceNetAdhocMatchingContext::processMemberListPacket(EmuEnvState &emuenv, Sce
         setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         deleteAllTimedFunctions(target);
         sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, &target.addr);
+        notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, target.addr);
         return SCE_NET_ADHOC_MATCHING_OK;
     }
 
@@ -619,7 +619,7 @@ int SceNetAdhocMatchingContext::processMemberListPacket(EmuEnvState &emuenv, Sce
     if (target.status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
         setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED);
         addTargetTimeout(target);
-        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, &target.addr);
+        notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ESTABLISHED, target.addr);
     }
 
     sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_MEMBER_LIST_ACK);
@@ -636,26 +636,26 @@ int SceNetAdhocMatchingContext::processMemberListAckPacket(EmuEnvState &emuenv, 
     if (target.status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED) {
         setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         deleteAllTimedFunctions(target);
-        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, &target.addr);
+        notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_ERROR, target.addr);
     }
 
     sendOptDataToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL, target.getOptLen(), target.getOpt());
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int SceNetAdhocMatchingContext::processByePacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target) {
+int SceNetAdhocMatchingContext::processByePacket(SceNetAdhocMatchingTarget &target) {
     if (target.status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED) {
         setTargetStatus(target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         deleteAllTimedFunctions(target);
     }
 
-    notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_BYE, &target.addr);
-    target.delete_target = true;
+    notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_BYE, target.addr);
+    target.deleteTarget = true;
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
-int SceNetAdhocMatchingContext::processUnk9Packet(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target) {
+int SceNetAdhocMatchingContext::processUnk9Packet(SceNetAdhocMatchingTarget &target) {
     if (target.status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES2)
         target.retryCount = retryCount;
     if (target.status != SCE_NET_ADHOC_MATCHING_TARGET_STATUS_ESTABLISHED)
@@ -672,7 +672,7 @@ int SceNetAdhocMatchingContext::processUnk9Packet(EmuEnvState &emuenv, SceUID th
         return SCE_NET_ADHOC_MATCHING_OK;
 
     target.setSendDataStatus(SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY);
-    notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_ACK, &target.addr);
+    notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_ACK, target.addr);
     return SCE_NET_ADHOC_MATCHING_OK;
 }
 
@@ -688,9 +688,9 @@ int SceNetAdhocMatchingContext::processDataPacket(EmuEnvState &emuenv, SceUID th
     if (target.recvDataCount <= dataPacket.packetId) {
         target.recvDataCount = dataPacket.packetId + 1;
         if (target.getPacketLen() - 0xc < 1) {
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA, &target.addr);
+            notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA, target.addr);
         } else {
-            notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA, &target.addr, dataPacket.header.packetLength - 0x8, dataPacket.dataBuffer.data());
+            notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA, target.addr, dataPacket.header.packetLength - 0x8, dataPacket.dataBuffer.data());
         }
     }
     sendDataMessageToTarget(emuenv, thread_id, target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_DATA_ACK);
@@ -713,7 +713,7 @@ int SceNetAdhocMatchingContext::processDataAckPacket(EmuEnvState &emuenv, SceUID
         return SCE_NET_ADHOC_MATCHING_OK;
 
     target.setSendDataStatus(SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY);
-    notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_ACK, &target.addr);
+    notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_ACK, target.addr);
 
     return SCE_NET_ADHOC_MATCHING_OK;
 }
@@ -821,7 +821,7 @@ void SceNetAdhocMatchingContext::handleEventRegistrationTimeout(EmuEnvState &emu
         }
         setTargetStatus(*target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr);
+        notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, target->addr);
     }
 
     if (target->status == SCE_NET_ADHOC_MATCHING_TARGET_STATUS_INPROGRES) {
@@ -832,7 +832,7 @@ void SceNetAdhocMatchingContext::handleEventRegistrationTimeout(EmuEnvState &emu
         }
         setTargetStatus(*target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
         sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-        notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr);
+        notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, target->addr);
     }
 }
 
@@ -856,7 +856,7 @@ void SceNetAdhocMatchingContext::handleEventTargetTimeout(EmuEnvState &emuenv, S
 
     setTargetStatus(*target, SCE_NET_ADHOC_MATCHING_TARGET_STATUS_CANCELLED);
     sendOptDataToTarget(emuenv, thread_id, *target, SCE_NET_ADHOC_MATCHING_PACKET_TYPE_CANCEL);
-    notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, &target->addr);
+    notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_TIMEOUT, target->addr);
 }
 
 void SceNetAdhocMatchingContext::handleEventHelloTimeout(EmuEnvState &emuenv, SceUID thread_id) {
@@ -869,7 +869,7 @@ void SceNetAdhocMatchingContext::handleEventHelloTimeout(EmuEnvState &emuenv, Sc
     addHelloTimedFunct(helloInterval);
 }
 
-void SceNetAdhocMatchingContext::handleEventDataTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target) {
+void SceNetAdhocMatchingContext::handleEventDataTimeout(SceNetAdhocMatchingTarget *target) {
     target->sendDataTimeout.message.isSheduled = false;
     if (target == nullptr)
         return;
@@ -881,7 +881,7 @@ void SceNetAdhocMatchingContext::handleEventDataTimeout(EmuEnvState &emuenv, Sce
         return;
 
     target->setSendDataStatus(SCE_NET_ADHOC_MATCHING_CONTEXT_SEND_DATA_STATUS_READY);
-    notifyHandler(emuenv, thread_id, SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_TIMEOUT, &target->addr);
+    notifyHandler(SCE_NET_ADHOC_MATCHING_HANDLER_EVENT_DATA_TIMEOUT, target->addr);
 }
 
 void SceNetAdhocMatchingContext::handleIncommingPackage(SceNetInAddr *addr, SceSize rawPacketLength, SceSize packetLength) {
@@ -957,7 +957,7 @@ SceNetAdhocMatchingTarget *SceNetAdhocMatchingContext::findTargetByAddr(SceNetIn
     ZoneScopedC(0xF6C2FF);
     SceNetAdhocMatchingTarget *target = this->targetList;
     while (target != nullptr) {
-        if (target->addr.s_addr == addr->s_addr && !target->delete_target)
+        if (target->addr.s_addr == addr->s_addr && !target->deleteTarget)
             return target;
         target = target->next;
     }
@@ -1226,29 +1226,50 @@ void SceNetAdhocMatchingContext::deleteAllTimedFunctions(SceNetAdhocMatchingTarg
     }
 }
 
-void SceNetAdhocMatchingContext::notifyHandler(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingHandlerEventType type, SceNetInAddr *peer, SceSize optLen, void *opt) {
+void SceNetAdhocMatchingContext::SendNotificationQueue(EmuEnvState &emuenv, SceUID thread_id) {
     if (!this->handler) {
         return;
     }
 
-    Address vPeer = 0;
-    Address vOpt = 0;
-    if (peer) {
+    while (!notificationQueue.empty()) {
+        const auto notification = notificationQueue.front();
+
+        Address vPeer = alloc(emuenv.mem, sizeof(SceNetInAddr), "adhocHandlerPeer");
+        Address vOpt = 0;
+
         vPeer = alloc(emuenv.mem, sizeof(SceNetInAddr), "adhocHandlerPeer");
-        memcpy(Ptr<char>(vPeer).get(emuenv.mem), peer, sizeof(SceNetInAddr));
-    }
-    if (opt) {
-        vOpt = alloc(emuenv.mem, optLen, "adhocHandlerOpt");
-        memcpy(Ptr<char>(vOpt).get(emuenv.mem), opt, optLen);
-    }
+        memcpy(Ptr<char>(vPeer).get(emuenv.mem), &notification.peer, sizeof(SceNetInAddr));
 
-    const ThreadStatePtr thread = lock_and_find(thread_id, emuenv.kernel.threads, emuenv.kernel.mutex);
-    thread->run_adhoc_callback(this->handler, this->id, (uint32_t)type, Ptr<char>(vPeer), optLen, Ptr<char>(vOpt));
+        if (!notification.opt.empty()) {
+            vOpt = alloc(emuenv.mem, notification.opt.size(), "adhocHandlerOpt");
+            memcpy(Ptr<char>(vOpt).get(emuenv.mem), notification.opt.data(), notification.opt.size());
+        }
 
-    if (peer)
+        const ThreadStatePtr thread = lock_and_find(thread_id, emuenv.kernel.threads, emuenv.kernel.mutex);
+        thread->run_adhoc_callback(this->handler, this->id, (uint32_t)notification.type, Ptr<char>(vPeer), notification.opt.size(), Ptr<char>(vOpt));
+
         free(emuenv.mem, vPeer); // free peer
-    if (opt)
-        free(emuenv.mem, vOpt); // free opt
+        if (!notification.opt.empty())
+            free(emuenv.mem, vOpt); // free opt
+        notificationQueue.pop();
+    }
+}
+
+void SceNetAdhocMatchingContext::notifyHandler(SceNetAdhocMatchingHandlerEventType type, SceNetInAddr &peer, SceSize optLen, void *opt) {
+    HandlerNotification notification{
+        .type = type,
+        .peer = peer,
+    };
+    const SceNetAdhocMatchingPipeMessage notifyMsg{
+        .type = SCE_NET_ADHOC_MATCHING_EVENT_NOTIFICATION,
+    };
+
+    notification.opt.resize(optLen);
+    if (optLen > 0)
+        memcpy(notification.opt.data(), opt, optLen);
+
+    notificationQueue.push(notification);
+    write(getWritePipeUid(), &notifyMsg, sizeof(SceNetAdhocMatchingPipeMessage));
 }
 
 uint32_t SceNetAdhocMatchingContext::getBroadcastAddr() {

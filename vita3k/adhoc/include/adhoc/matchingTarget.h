@@ -72,7 +72,7 @@ public:
     int retryCount;
 
     int unk_50;
-    bool delete_target;
+    bool deleteTarget;
     int targetCount;
     SceUID uid;
 

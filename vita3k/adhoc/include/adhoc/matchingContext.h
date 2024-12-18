@@ -18,6 +18,7 @@
 #pragma once
 
 #include <cassert>
+#include <queue>
 #include <vector>
 
 #include "adhoc/calloutSyncing.h"
@@ -121,7 +122,7 @@ struct SceNetAdhocMatchingOptMessage {
     SceNetAdhocMatchingMessageHeader header;
     std::vector<char> dataBuffer;
     int targetCount;
-    std::array<char,0xc> padding;
+    std::array<char, 0xc> padding;
 
     std::size_t messageSize() const {
         return sizeof(header) + dataBuffer.size() + 0x10;
@@ -221,6 +222,12 @@ struct SceNetAdhocMatchingMemberMessage {
     }
 };
 
+struct HandlerNotification {
+    SceNetAdhocMatchingHandlerEventType type;
+    SceNetInAddr peer;
+    std::vector<char> opt;
+};
+
 class SceNetAdhocMatchingContext {
 public:
     ~SceNetAdhocMatchingContext();
@@ -269,9 +276,10 @@ public:
     void handleEventRegistrationTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
     void handleEventTargetTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
     void handleEventHelloTimeout(EmuEnvState &emuenv, SceUID thread_id);
-    void handleEventDataTimeout(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget *target);
+    void handleEventDataTimeout(SceNetAdhocMatchingTarget *target);
     void handleIncommingPackage(SceNetInAddr *addr, SceSize rawPacketLen, SceSize packetLength);
 
+    void SendNotificationQueue(EmuEnvState &emuenv, SceUID thread_id);
     int broadcastAbort(EmuEnvState &emuenv, SceUID thread_id);
 
 public:
@@ -290,12 +298,12 @@ public:
 private:
     // Packet data processing
     void processPacketFromTarget(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
-    int processHelloPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
+    int processHelloPacket(SceNetAdhocMatchingTarget &target);
     int processHelloAckPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
     int processMemberListPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
     int processMemberListAckPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
-    int processByePacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
-    int processUnk9Packet(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
+    int processByePacket(SceNetAdhocMatchingTarget &target);
+    int processUnk9Packet(SceNetAdhocMatchingTarget &target);
     int processDataPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
     int processDataAckPacket(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingTarget &target);
 
@@ -323,7 +331,7 @@ private:
     void deleteSendDataTimeout(SceNetAdhocMatchingTarget &target);
     void deleteAllTimedFunctions(SceNetAdhocMatchingTarget &target);
 
-    void notifyHandler(EmuEnvState &emuenv, SceUID thread_id, SceNetAdhocMatchingHandlerEventType type, SceNetInAddr *peer, SceSize optLen = 0, void *opt = nullptr);
+    void notifyHandler(SceNetAdhocMatchingHandlerEventType type, SceNetInAddr &peer, SceSize optLen = 0, void *opt = nullptr);
 
     uint32_t getBroadcastAddr();
     uint32_t getTargetAddr(const SceNetAdhocMatchingTarget &target);
@@ -348,6 +356,7 @@ private:
     unsigned int rexmtInterval{};
 
     SceNetAdhocMatchingHandler handler{};
+    std::queue<HandlerNotification> notificationQueue{};
 
     bool shouldExit{ true };
     bool isEventThreadInitialized{};

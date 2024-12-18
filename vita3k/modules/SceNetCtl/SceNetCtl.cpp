@@ -343,8 +343,14 @@ EXPORT(int, sceNetCtlAdhocGetInAddr, SceNetInAddr *inaddr) {
 
     std::vector<net_utils::AssignedAddr> addrs;
     net_utils::getAllAssignedAddrs(addrs);
+    std::size_t selectedInterface = emuenv.cfg.adhoc_addr;
 
-    const auto addr = addrs[emuenv.cfg.adhoc_addr].addr.c_str();
+    if (selectedInterface >= addrs.size()) {
+        LOG_INFO("Invalid interface selected");
+        selectedInterface = 0;
+    }
+
+    const auto addr = addrs[selectedInterface].addr.c_str();
 
     inet_pton(AF_INET, addr, &inaddr->s_addr);
 
