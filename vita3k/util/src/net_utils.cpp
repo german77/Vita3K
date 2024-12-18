@@ -502,13 +502,13 @@ void getAllAssignedAddrs(std::vector<AssignedAddr> &outAddrs) {
     }
     if ((dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen)) == NO_ERROR) {
         PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+        const std::string noAddress = "0.0.0.0";
         while (pAdapter) {
-            if (pAdapter->Type == MIB_IF_TYPE_ETHERNET) {
-                IP_ADDR_STRING *pIPAddr = &pAdapter->IpAddressList;
-                while (pIPAddr) {
+            IP_ADDR_STRING *pIPAddr = &pAdapter->IpAddressList;
+            while (pIPAddr) {
+                if (noAddress.compare(pIPAddr->IpAddress.String)!=0)
                     outAddrs.push_back({ pAdapter->Description, pIPAddr->IpAddress.String, pIPAddr->IpMask.String });
-                    pIPAddr = pIPAddr->Next;
-                }
+                pIPAddr = pIPAddr->Next;
             }
             pAdapter = pAdapter->Next;
         }

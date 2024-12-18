@@ -118,7 +118,7 @@ int adhocMatchingInputThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
 
         // We received the whole packet, we can now commence the parsing and the fun
         std::lock_guard guard(emuenv.adhoc.getMutex());
-        ctx->handleIncommingPackage(&fromAddr.sin_addr, rawPacketSize, packet.packetLength);
+        ctx->handleIncommingPackage(fromAddr.sin_addr, rawPacketSize, packet.packetLength);
     }
 
     return 0;
