@@ -65,7 +65,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             ctx->handleEventDataTimeout(pipeMessage.target);
             break;
         default:
-            return;
+            continue;
         }
 
         if (pipeMessage.target == nullptr) {
