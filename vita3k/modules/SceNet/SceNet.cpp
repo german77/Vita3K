@@ -563,7 +563,6 @@ EXPORT(int, sceNetShowRoute) {
 
 EXPORT(int, sceNetShutdown, int sid, int how) {
     TRACY_FUNC(sceNetShutdown, sid, how);
-    LOG_INFO("sceNetShutdown");
     auto sock = lock_and_find(sid, emuenv.net.socks, emuenv.kernel.mutex);
     if (!sock) {
         return RET_ERROR(SCE_NET_EBADF);
@@ -573,28 +572,24 @@ EXPORT(int, sceNetShutdown, int sid, int how) {
 
 EXPORT(int, sceNetSocket, const char *name, int domain, SceNetSocketType type, SceNetProtocol protocol) {
     TRACY_FUNC(sceNetSocket, name, domain, type, protocol);
-    int hostSockType = 0;
+    SocketPtr sock;
+
     switch (type) {
     case SCE_NET_SOCK_STREAM:
-        hostSockType = SOCK_STREAM;
-        break;
     case SCE_NET_SOCK_DGRAM:
-        hostSockType = SOCK_DGRAM;
-        break;
-    case SCE_NET_SOCK_RAW:
-        hostSockType = SOCK_RAW;
-        break;
-        // The cases below are the biggest stub in history
-    case SCE_NET_SOCK_DGRAM_P2P:
-        hostSockType = SOCK_DGRAM;
-        break;
-    case SCE_NET_SOCK_STREAM_P2P:
-        hostSockType = SOCK_STREAM;
+    case SCE_NET_SOCK_RAW: {
+        sock = std::make_shared<PosixSocket>(domain, type, protocol);
         break;
     }
-
-    LOG_ERROR("socket {} {} {}", domain, hostSockType, static_cast<int>(protocol));
-    SocketPtr sock = std::make_shared<PosixSocket>(domain, hostSockType, protocol);
+    case SCE_NET_SOCK_DGRAM_P2P:
+    case SCE_NET_SOCK_STREAM_P2P: {
+        int hostSockType = type == SCE_NET_SOCK_STREAM_P2P ? SOCK_STREAM : SOCK_DGRAM;
+        sock = std::make_shared<P2PSocket>(domain, hostSockType, protocol);
+        break;
+    }
+    default:
+        return RET_ERROR(SCE_NET_EINVAL);
+    }
 
     std::vector<net_utils::AssignedAddr> addrs;
     net_utils::getAllAssignedAddrs(addrs);

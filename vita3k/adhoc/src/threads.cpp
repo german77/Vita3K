@@ -41,7 +41,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             return 0;
         case SCE_NET_ADHOC_MATCHING_EVENT_NOTIFICATION:
             ctx->SendNotificationQueue(emuenv, thread_id);
-            break;
+            continue;
         default:
             break;
         }
@@ -65,7 +65,7 @@ int adhocMatchingEventThread(EmuEnvState &emuenv, SceUID thread_id, SceUID id) {
             ctx->handleEventDataTimeout(pipeMessage.target);
             break;
         default:
-            break;
+            return;
         }
 
         if (pipeMessage.target == nullptr) {

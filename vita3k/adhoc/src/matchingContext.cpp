@@ -1240,8 +1240,10 @@ void SceNetAdhocMatchingContext::SendNotificationQueue(EmuEnvState &emuenv, SceU
         thread->run_adhoc_callback(this->handler, this->id, (uint32_t)notification.type, Ptr<char>(vPeer), notification.opt.size(), Ptr<char>(vOpt));
 
         free(emuenv.mem, vPeer); // free peer
+
         if (!notification.opt.empty())
             free(emuenv.mem, vOpt); // free opt
+
         notificationQueue.pop();
     }
 }

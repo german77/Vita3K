@@ -100,8 +100,26 @@ struct PosixSocket : public Socket {
 };
 
 struct P2PSocket : public Socket {
+    abs_socket sock;
+    int16_t vPort;
+
+    int sockopt_so_reuseport = 0;
+    int sockopt_so_onesbcast = 0;
+    int sockopt_so_usecrypto = 0;
+    int sockopt_so_usesignature = 0;
+    int sockopt_so_tppolicy = 0;
+    int sockopt_so_nbio = 0;
+    int sockopt_ip_ttlchk = 0;
+    int sockopt_ip_maxttl = 0;
+    int sockopt_tcp_mss_to_advertise = 0;
+
     explicit P2PSocket(int domain, int type, int protocol)
-        : Socket(domain, type, protocol) {}
+        : Socket(domain, type, protocol)
+        , sock(socket(domain, type, protocol)) {}
+
+    explicit P2PSocket(abs_socket sock)
+        : Socket(0, 0, 0)
+        , sock(sock) {}
 
     int close() override;
     int shutdown_socket(int how) override;
